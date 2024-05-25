@@ -39,7 +39,7 @@ def search(batch_queries=True):
         queries = Queries(QUERIES_PATH)
 
         if batch_queries:
-            ranking = searcher.search_all(queries, k=100)
+            ranking = searcher.search_all(queries, k=5)
             collection_map_path = os.path.join(os.path.dirname(COLLECTION_PATH), "collection_map.json")
             if os.path.exists(collection_map_path):
                 with open(collection_map_path, "r") as file:
