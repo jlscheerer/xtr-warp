@@ -134,6 +134,12 @@ def colbert_score_reduce(scores_padded, D_mask, config: ColBERTConfig):
     scores_padded[D_padding] = -9999
     scores = scores_padded.max(1).values
 
+    # print(scores_padded)
+    # print(D_mask)
+    # print(config)
+
+    # raise AssertionError
+
     assert config.interaction in ['colbert', 'flipr'], config.interaction
 
     if config.interaction == 'flipr':
@@ -150,6 +156,9 @@ def colbert_score_reduce(scores_padded, D_mask, config: ColBERTConfig):
             B = scores[:, config.query_maxlen:].topk(K2, dim=-1).values.sum(1)
 
         return A + B
+
+    # print(scores.shape)
+    # print(scores.count_nonzero(-1))
 
     return scores.sum(-1)
 

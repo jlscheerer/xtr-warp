@@ -4,9 +4,9 @@ from tqdm import tqdm
 
 from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer
 from colbert.utils.amp import MixedPrecisionManager
-
 from colbert.modeling.colbert import ColBERT
 
+from colbert.modeling.xtr import XTRCheckpoint, build_xtr_model
 
 class Checkpoint(ColBERT):
     """
@@ -14,6 +14,13 @@ class Checkpoint(ColBERT):
 
         TODO: Add .cast() accepting [also] an object instance-of(Checkpoint) as first argument.
     """
+    def __new__(cls, name, colbert_config=None, verbose:int = 3):
+        if name == "google/xtr-base-en":
+            xtr = build_xtr_model()
+            return XTRCheckpoint(xtr, colbert_config)
+        instance = super().__new__(cls)
+        instance.__init__(name, colbert_config, verbose)
+        return instance
 
     def __init__(self, name, colbert_config=None, verbose:int = 3):
         super().__init__(name, colbert_config)

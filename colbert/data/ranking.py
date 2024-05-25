@@ -27,6 +27,12 @@ class Ranking:
         self.__provenance = provenance or path or Provenance()
         self.data = self._prepare_data(data or self._load_file(path))
 
+    def apply_collection_map(self, collection_map):
+        new_flat_ranking = []
+        for query_id, passage_id, rank, score in self.flat_ranking:
+            new_flat_ranking.append((query_id, collection_map[passage_id], rank, score))
+        self.flat_ranking = new_flat_ranking
+
     def provenance(self):
         return self.__provenance
     

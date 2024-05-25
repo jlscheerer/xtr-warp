@@ -185,9 +185,23 @@ class IndexScorer(IndexLoader, CandidateGeneration):
             D_mask = self.doclens[pids.long()]
 
         if Q.size(0) == 1:
-            return colbert_score_packed(Q, D_packed, D_mask, config), pids
+            scores = colbert_score_packed(Q, D_packed, D_mask, config)
+            # NOTE As every score would be divided by this const. nothing changes
+            #      throught the approx. stages.
+            if config.checkpoint == "google/xtr-base-en":
+                query_len = Q.count_nonzero(dim=1)[0, 0]
+                scores /= query_len
+            return scores, pids
 
         D_strided = StridedTensor(D_packed, D_mask, use_gpu=self.use_gpu)
         D_padded, D_lengths = D_strided.as_padded_tensor()
 
-        return colbert_score(Q, D_padded, D_lengths, config), pids
+        scores = colbert_score(Q, D_padded, D_lengths, config)
+
+        # NOTE As every score would be divided by this const. nothing changes
+        #      throught the approx. stages.
+        if config.checkpoint == "google/xtr-base-en":
+            query_len = Q.count_nonzero(dim=1)[0, 0]
+            scores /= query_len
+
+        return scores, pids
