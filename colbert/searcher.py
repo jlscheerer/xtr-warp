@@ -14,6 +14,8 @@ from colbert.infra.run import Run
 from colbert.infra.config import ColBERTConfig, RunConfig
 from colbert.infra.launcher import print_memory_stats
 
+from colbert.utils.tracker import NOPTracker
+
 import time
 
 TextQueries = Union[str, 'list[str]', 'dict[int, str]', Queries]
@@ -62,9 +64,11 @@ class Searcher:
 
         return Q
 
-    def search(self, text: str, k=10, filter_fn=None, full_length_search=False, pids=None):
+    def search(self, text: str, k=10, filter_fn=None, full_length_search=False, pids=None, tracker=NOPTracker()):
+        tracker.begin("Query Encoding")
         Q = self.encode(text, full_length_search=full_length_search)
-        return self.dense_search(Q, k, filter_fn=filter_fn, pids=pids)
+        tracker.end("Query Encoding")
+        return self.dense_search(Q, k, filter_fn=filter_fn, pids=pids, tracker=tracker)
 
     def search_all(self, queries: TextQueries, k=10, filter_fn=None, full_length_search=False, qid_to_pids=None):
         queries = Queries.cast(queries)
@@ -103,7 +107,7 @@ class Searcher:
 
         return Ranking(data=data, provenance=provenance)
 
-    def dense_search(self, Q: torch.Tensor, k=10, filter_fn=None, pids=None):
+    def dense_search(self, Q: torch.Tensor, k=10, filter_fn=None, pids=None, tracker=NOPTracker()):
         if k <= 10:
             if self.config.ncells is None:
                 self.configure(ncells=1)
@@ -126,6 +130,6 @@ class Searcher:
             if self.config.ndocs is None:
                 self.configure(ndocs=max(k * 4, 4096))
 
-        pids, scores = self.ranker.rank(self.config, Q, filter_fn=filter_fn, pids=pids)
+        pids, scores = self.ranker.rank(self.config, Q, filter_fn=filter_fn, pids=pids, tracker=tracker)
 
         return pids[:k], list(range(1, k+1)), scores[:k]
