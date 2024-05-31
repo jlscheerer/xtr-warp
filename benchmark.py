@@ -1,11 +1,12 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import torch
 from xtr_via_plaid import search, XTRRunConfig
 from colbert.modeling.colbert import ColBERT
 import itertools
 import json
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 def setup_num_threads(num_threads):
     torch.set_num_threads(num_threads)
