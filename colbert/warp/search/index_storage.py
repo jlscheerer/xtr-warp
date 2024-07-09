@@ -1,4 +1,5 @@
 import os
+import pathlib
 import torch
 import numpy as np
 from itertools import product
@@ -7,6 +8,8 @@ from colbert.infra.config.config import ColBERTConfig
 from colbert.utils.tracker import NOPTracker
 
 from colbert.utils.utils import print_message
+
+from torch.utils.cpp_extension import load
 
 
 class IndexLoaderWARP:
@@ -128,6 +131,22 @@ class IndexScorerWARP(IndexLoaderWARP):
     def try_load_torch_extensions(cls, use_gpu):
         if hasattr(cls, "loaded_extensions") or use_gpu:
             return
+
+        # TODO(jlscheerer) Add un-optimized CPP/Python Implementations for comparison.
+        print_message(
+            f"Loading filter_pids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+        )
+        decompress_centroid_embeds_strided_repacked_cpp = load(
+            name="decompress_centroid_embeds_strided_repacked_cpp",
+            sources=[
+                os.path.join(
+                    pathlib.Path(__file__).parent.resolve(),
+                    "decompress_centroid_embeds_strided_repacked.cpp",
+                ),
+            ],
+            extra_cflags=["-O3"],
+            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+        ).decompress_centroid_embeds_strided_repacked_cpp
 
         raise NotImplementedError()
 
