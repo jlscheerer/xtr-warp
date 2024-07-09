@@ -20,7 +20,7 @@ if __name__ == "__main__":
     config = XTRRunConfig(
         nranks=4,
         dataset="lotte",
-        collection="lifestyle",
+        collection="writing",
         type_="search",
         datasplit="test",
         nbits=4,
