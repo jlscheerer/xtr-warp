@@ -163,7 +163,20 @@ class IndexScorerWARP(IndexLoaderWARP):
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
         ).decompress_centroid_embeds_strided_repacked_cpp
 
-        raise NotImplementedError()
+        print_message(
+            f"Loading compute_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+        )
+        compute_candidate_scores_cpp = load(
+            name="compute_candidate_scores_cpp",
+            sources=[
+                os.path.join(
+                    pathlib.Path(__file__).parent.resolve(),
+                    "compute_candidate_scores.cpp",
+                ),
+            ],
+            extra_cflags=["-O3"],
+            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+        ).compute_candidate_scores_cpp
 
         cls.loaded_extensions = True
 
