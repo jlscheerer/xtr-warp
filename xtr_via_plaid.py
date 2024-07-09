@@ -16,11 +16,13 @@ from colbert.utils.tracker import ExecutionTracker
 
 from index_converter import convert_index
 
+# TODO(jlscheerer) Adapt these to be loaded from a config.yml file.
 INDEX_ROOT = "/future/u/scheerer/home/data/indexes/ColBERT-XTR"
 EXPERIMENT_ROOT = "/lfs/1/scheerer/experiments/ColBERT-XTR"
 
 BEIR_COLLECTION_PATH = "/lfs/1/scheerer/datasets/beir/datasets"
 LOTTE_COLLECTION_PATH = "/lfs/1/scheerer/datasets/lotte/lotte"
+
 
 @dataclass
 class XTRRunConfig:
@@ -65,57 +67,97 @@ class XTRRunConfig:
     def experiment_name(self):
         return f"{self.dataset}-{self.collection}"
 
+
 def to_colbert_config(config: XTRRunConfig):
     return ColBERTConfig(
         nbits=config.nbits,
         doc_maxlen=DOC_MAXLEN,
         query_maxlen=QUERY_MAXLEN,
         index_path=f"{config.index_root}/{config.index_name}",
-        root="./"
+        root="./",
     )
 
+
 def index(config: XTRRunConfig):
-    with Run().context(RunConfig(nranks=config.nranks, experiment=config.experiment_name)):
-        indexer = Indexer(checkpoint="google/xtr-base-en", config=to_colbert_config(config))
+    with Run().context(
+        RunConfig(nranks=config.nranks, experiment=config.experiment_name)
+    ):
+        indexer = Indexer(
+            checkpoint="google/xtr-base-en", config=to_colbert_config(config)
+        )
         indexer.index(name=config.index_name, collection=config.collection_path)
 
+
 def search(config: XTRRunConfig, batch_queries=True):
-    with Run().context(RunConfig(nranks=config.nranks, experiment=config.experiment_name)):
-        searcher = Searcher(index=config.index_name, config=to_colbert_config(config),
-                            index_root=config.index_root)
+    with Run().context(
+        RunConfig(nranks=config.nranks, experiment=config.experiment_name)
+    ):
+        searcher = Searcher(
+            index=config.index_name,
+            config=to_colbert_config(config),
+            index_root=config.index_root,
+        )
         queries = Queries(config.queries_path)
 
         if batch_queries:
             ranking = searcher.search_all(queries, k=config.k)
-            collection_map_path = os.path.join(os.path.dirname(config.collection_path), "collection_map.json")
+            collection_map_path = os.path.join(
+                os.path.dirname(config.collection_path), "collection_map.json"
+            )
             if os.path.exists(collection_map_path):
                 with open(collection_map_path, "r") as file:
                     collection_map = json.load(file)
-                    collection_map = {int(key): int(value) for key, value in collection_map.items()}
-                print(f"[WARNING] Applying collection_map found in {config.collection_path}")
+                    collection_map = {
+                        int(key): int(value) for key, value in collection_map.items()
+                    }
+                print(
+                    f"[WARNING] Applying collection_map found in {config.collection_path}"
+                )
                 ranking.apply_collection_map(collection_map)
-            return ranking.save(f"{config.index_name}.split={config.datasplit}.ranking.k={config.k}.tsv")
+            return ranking.save(
+                f"{config.index_name}.split={config.datasplit}.ranking.k={config.k}.tsv"
+            )
         else:
-            tracker = ExecutionTracker("XTR/PLAID [baseline]", ["Query Encoding", "Candidate Generation", "Filtering",
-                                                                "Decompress Residuals", "Scoring", "Sorting"])
+            tracker = ExecutionTracker(
+                "XTR/PLAID [baseline]",
+                [
+                    "Query Encoding",
+                    "Candidate Generation",
+                    "Filtering",
+                    "Decompress Residuals",
+                    "Scoring",
+                    "Sorting",
+                ],
+            )
             for query_id, query_text in tqdm(queries):
                 tracker.next_iteration()
                 ranking = searcher.search(query_text, k=100, tracker=tracker)
                 tracker.end_iteration()
-                collection_map_path = os.path.join(os.path.dirname(config.collection_path), "collection_map.json")
+                collection_map_path = os.path.join(
+                    os.path.dirname(config.collection_path), "collection_map.json"
+                )
                 if os.path.exists(collection_map_path):
                     with open(collection_map_path, "r") as file:
                         collection_map = json.load(file)
-                        collection_map = {int(key): int(value) for key, value in collection_map.items()}
+                        collection_map = {
+                            int(key): int(value)
+                            for key, value in collection_map.items()
+                        }
                     # print(f"[WARNING] Applying collection_map found in {config.collection_path}")
-                    ranking = ([collection_map[x] for x in ranking[0]], ranking[1], ranking[2])
+                    ranking = (
+                        [collection_map[x] for x in ranking[0]],
+                        ranking[1],
+                        ranking[2],
+                    )
             return tracker
+
 
 def convert(config: XTRRunConfig):
     index_path = os.path.join(config.index_root, config.index_name)
     convert_index(index_path)
 
-if __name__=='__main__':
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser("xtr_via_plaid")
     parser.add_argument("mode")
     parser.add_argument("-c", "--collection", required=True)
@@ -124,14 +166,21 @@ if __name__=='__main__':
 
     args = parser.parse_args()
 
-    config = XTRRunConfig(nranks=4, dataset="lotte", collection=args.collection,
-                        type_="search", datasplit=args.split, nbits=args.nbits, k=100)
+    config = XTRRunConfig(
+        nranks=4,
+        dataset="lotte",
+        collection=args.collection,
+        type_="search",
+        datasplit=args.split,
+        nbits=args.nbits,
+        k=100,
+    )
 
-    
     if args.mode == "search":
         search(config, batch_queries=False)
     elif args.mode == "index":
         index(config)
     elif args.mode == "convert":
         convert(config)
-    else: raise AssertionError
+    else:
+        raise AssertionError
