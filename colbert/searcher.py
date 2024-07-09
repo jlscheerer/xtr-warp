@@ -61,6 +61,7 @@ class Searcher:
         if load_index_with_mmap and use_gpu:
             raise ValueError(f"Memory-mapped index can only be used with CPU!")
 
+        self.warp_engine = warp_engine
         if warp_engine:
             self.ranker = IndexScorerWARP(
                 self.index, self.config, use_gpu, load_index_with_mmap
@@ -170,8 +171,13 @@ class Searcher:
             if self.config.ndocs is None:
                 self.configure(ndocs=max(k * 4, 4096))
 
-        pids, scores = self.ranker.rank(
-            self.config, Q, filter_fn=filter_fn, pids=pids, tracker=tracker
-        )
+        if self.warp_engine:
+            pids, scores = self.ranker.rank(
+                self.config, Q, k=k, filter_fn=filter_fn, pids=pids, tracker=tracker
+            )
+        else:
+            pids, scores = self.ranker.rank(
+                self.config, Q, filter_fn=filter_fn, pids=pids, tracker=tracker
+            )
 
         return pids[:k], list(range(1, k + 1)), scores[:k]
