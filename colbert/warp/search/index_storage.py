@@ -3,10 +3,11 @@ import pathlib
 import torch
 import numpy as np
 from itertools import product
+from tqdm import tqdm
 
 from colbert.infra.config.config import ColBERTConfig
 from colbert.utils.tracker import NOPTracker
-
+from colbert.search.strided_tensor import StridedTensor
 from colbert.utils.utils import print_message
 
 from torch.utils.cpp_extension import load
@@ -27,14 +28,30 @@ class IndexLoaderWARP:
         self.use_gpu = use_gpu
         self.load_index_with_mmap = load_index_with_mmap
 
-        decompression_lookup_table = self._load_buckets(config.nbits)
+        (
+            reversed_bit_map,
+            decompression_lookup_table,
+            bucket_weights,
+        ) = self._load_buckets(config.nbits)
 
         # TODO(jlscheerer) Just directly emit torch tensors during conversion.
-        self._load_codec()
+        residuals_compacted = self._load_codec(
+            reversed_bit_map, decompression_lookup_table, bucket_weights
+        )
 
         # TODO(jlscheerer) This is a REALLY unncessarily expensive computation.
         # We should eventually move this into the index conversion.
         print_message(f"#> Repacking residuals...")
+        residuals_repacked_compacted = reversed_bit_map[residuals_compacted.long()]
+        residuals_repacked_compacted_d = decompression_lookup_table[
+            residuals_repacked_compacted.long()
+        ]
+        residuals_repacked_compacted_df = (
+            2**4 * residuals_repacked_compacted_d[:, :, 0]
+            + residuals_repacked_compacted_d[:, :, 1]
+        )
+        self.residuals_repacked_compacted_df = residuals_repacked_compacted_df
+        # residuals_repacked_strided = StridedTensor(residuals_repacked_compacted_df, sizes_compacted, use_gpu=False)
 
     def _load_buckets(self, nbits: int):
         print_message(f"#> Loading buckets...")
@@ -47,6 +64,8 @@ class IndexLoaderWARP:
         bucket_cutoffs = torch.from_numpy(
             np.load(os.path.join(self.index_path, "bucket_cutoffs.npy"))
         )
+
+        self.bucket_weights = bucket_weights
 
         # TODO(jlscheerer) We could just directly store this as part of the index.
         reversed_bit_map = []
@@ -77,9 +96,10 @@ class IndexLoaderWARP:
             list(product(list(range(len(bucket_weights))), repeat=keys_per_byte))
         ).to(torch.uint8)
 
-        return decompression_lookup_table
+        return reversed_bit_map, decompression_lookup_table, bucket_weights
 
-    def _load_codec(self):
+    # TODO(jlscheerer) We really don't need all of these arguments once we directly emit the correct index.
+    def _load_codec(self, reversed_bit_map, decompression_lookup_table, bucket_weights):
         print_message(f"#> Loading codec...")
 
         centroids = torch.from_numpy(
@@ -101,6 +121,47 @@ class IndexLoaderWARP:
         nembeddings = residuals_compacted.shape[0]
         assert sizes_compacted.sum() == nembeddings
         assert codes_compacted.shape == (nembeddings,)
+
+        self.sizes_compacted = sizes_compacted
+        self.codes_strided = StridedTensor(
+            codes_compacted, sizes_compacted, use_gpu=self.use_gpu
+        )
+
+        offsets_compacted = torch.zeros((ncentroids + 1,), dtype=torch.long)
+        torch.cumsum(sizes_compacted, dim=0, out=offsets_compacted[1:])
+        self.offsets_compacted = offsets_compacted
+
+        # TODO(jlscheerer) Make this more elegant by introducing a skip_mask
+        # Hacky way to force low number of candidates for small entries
+        self.kdummy_centroid = sizes_compacted.argmin().item()
+
+        # TODO(jlscheerer) This is a REALLY unncessarily expensive computation.
+        # We should eventually move this into the index conversion.
+        print_message(f"#> Averaging centroids...")
+
+        def decompress_centroid_embeddings(centroid_id):
+            centroid = centroids[centroid_id]
+            size = sizes_compacted[centroid_id]
+            begin, end = offsets_compacted[centroid_id : centroid_id + 2]
+            codes = codes_compacted[begin:end]
+            residuals = residuals_compacted[begin:end]
+            assert codes.shape == (size,) and residuals.shape[0] == size
+
+            residuals_ = reversed_bit_map[residuals.long()]
+            residuals_ = decompression_lookup_table[residuals_.long()]
+            residuals_ = residuals_.reshape(residuals_.shape[0], -1)
+            residuals_ = bucket_weights[residuals_.long()]
+            embeddings = centroid + residuals_
+            return torch.nn.functional.normalize(
+                embeddings.to(torch.float32), p=2, dim=-1
+            )
+
+        self.avg_centroids = torch.zeros_like(centroids)
+        for i in tqdm(range(centroids.shape[0])):
+            centroid = decompress_centroid_embeddings(i).mean(dim=0)
+            self.avg_centroids[i] = centroid
+
+        return residuals_compacted
 
 
 class IndexScorerWARP(IndexLoaderWARP):
@@ -136,7 +197,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         print_message(
             f"Loading precompute_topk_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        precompute_topk_centroids_cpp = load(
+        cls.precompute_topk_centroids_cpp = load(
             name="precompute_topk_centroids_cpp",
             sources=[
                 os.path.join(
@@ -151,7 +212,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         print_message(
             f"Loading decompress_centroid_embeds_strided_repacked_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        decompress_centroid_embeds_strided_repacked_cpp = load(
+        cls.decompress_centroid_embeds_strided_repacked_cpp = load(
             name="decompress_centroid_embeds_strided_repacked_cpp",
             sources=[
                 os.path.join(
@@ -166,7 +227,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         print_message(
             f"Loading compute_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        compute_candidate_scores_cpp = load(
+        cls.compute_candidate_scores_cpp = load(
             name="compute_candidate_scores_cpp",
             sources=[
                 os.path.join(
@@ -180,15 +241,140 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         cls.loaded_extensions = True
 
-    def rank(
-        self,
-        config,
-        Q,
-        filter_fn=None,
-        pids=None,
-        tracker=NOPTracker(),
-    ):
+    def rank(self, config, Q, k=100, filter_fn=None, pids=None, tracker=NOPTracker()):
         assert filter_fn is None
         assert pids is None
 
-        raise NotImplementedError()
+        # TODO(jlscheerer) Move this back into the config.
+        nprobe = 12  # config.ncells
+
+        with torch.inference_mode():
+            # Compute the MSE
+
+            tracker.begin("Candidate Generation")
+            # centroid_scores = (centroids @ Q.squeeze(0).T)
+            centroid_scores = self.avg_centroids @ Q.squeeze(0).T
+
+            tracker.end("Candidate Generation")
+
+            fill_blank = 10_000
+            Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
+            (
+                cells,
+                centroid_scores,
+                mse_estimates,
+            ) = self._precompute_topk_centroids_native(
+                Q_mask, centroid_scores, nprobe, fill_blank, tracker
+            )
+
+            tracker.begin("Decompression")
+            # Decompression
+            # NOTE: This is a significant speed-up compared to the naive approach.
+            (
+                decompressed_candidate_scores_strided,
+                decompressed_sizes,
+            ) = self._decompress_centroid_embeds_native_strided_repacked(
+                Q.squeeze(0), cells, centroid_scores, nprobe
+            )
+            tracker.end("Decompression")
+
+            tracker.begin("Lookup")
+            # TODO(jlscheerer) Investigate: this seems to be slower than the naive version!
+            # TODO(jlscheerer) Eventually just merge both into something that can be mmapped.
+            candidate_pids_strided, candidate_sizes = self.codes_strided.lookup(cells)
+            tracker.end("Lookup")
+
+            """
+            uniq_candidate_pids, candidate_scores = build_matrix_native(cells, candidate_pids_strided, decompressed_candidate_scores_strided, candidate_sizes, mse_estimates, nprobe, it_tracker)
+
+            it_tracker.begin("Sort")
+            candidate_scores, sorting_indices = torch.sort(candidate_scores, descending=True)
+            pids, scores = uniq_candidate_pids[sorting_indices].tolist(), candidate_scores.tolist()
+            it_tracker.end("Sort")
+            """
+
+            pids, scores = self._compute_candidate_scores_native(
+                cells,
+                candidate_pids_strided,
+                decompressed_candidate_scores_strided,
+                candidate_sizes,
+                mse_estimates,
+                nprobe,
+                k,
+                tracker,
+            )
+
+            return pids, scores
+
+    def _precompute_topk_centroids_native(
+        self, Q_mask, centroid_scores, nprobe, fill_blank, tracker
+    ):
+        # TODO(jlscheerer) Compute centroid_scores differently so we don't need to tranpose...
+        tracker.begin("MSE Computation")
+        tracker.end("MSE Computation")
+
+        tracker.begin("top-k Precompute")
+        cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
+            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, fill_blank
+        )
+
+        cells = cells.flatten().contiguous()  # (32 * nprobe,)
+        centroid_scores = centroid_scores.flatten().contiguous()
+
+        # NOTE This SIGNIFICANTLY IMPROVES performance, because we don't unnecessarily do decompression
+        # We just decompress the dummy centroid here! ~60it/s vs 35it/s, without loss of performance.
+        # TODO(jlscheerer) Fix this and use a "skip_mask". This requires correct handling of strides with
+        #                  a length of zero.
+        cells[centroid_scores == 0] = self.kdummy_centroid
+        tracker.end("top-k Precompute")
+
+        return cells, centroid_scores, mse
+
+    def _decompress_centroid_embeds_native_strided_repacked(
+        self, Q, centroid_ids, centroid_scores, nprobe
+    ):
+        begins = self.offsets_compacted[centroid_ids]
+        ends = self.offsets_compacted[centroid_ids + 1]
+
+        sizes = ends - begins
+        results = IndexScorerWARP.decompress_centroid_embeds_strided_repacked_cpp(
+            begins,
+            ends,
+            sizes,
+            centroid_scores,
+            self.residuals_repacked_compacted_df,
+            self.bucket_weights,
+            Q,
+            nprobe,
+        )
+
+        return results, sizes
+
+    def _compute_candidate_scores_native(
+        self,
+        cells,
+        candidate_pids_strided,
+        decompressed_candidate_scores_strided,
+        candidate_sizes,
+        mse_estimates,
+        nprobe,
+        k,
+        tracker,
+    ):
+        tracker.begin("Prepare Matrix")
+        tracker.end("Prepare Matrix")
+
+        tracker.begin("Build Matrix")
+        pids, scores = IndexScorerWARP.compute_candidate_scores_cpp(
+            candidate_pids_strided,
+            decompressed_candidate_scores_strided,
+            candidate_sizes,
+            mse_estimates,
+            nprobe,
+            k,
+        )
+        tracker.end("Build Matrix")
+
+        tracker.begin("Sort")
+        tracker.end("Sort")
+        return pids.tolist(), scores.tolist()

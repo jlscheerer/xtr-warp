@@ -33,3 +33,5 @@ if __name__ == "__main__":
             warp_engine=True,
         )
         queries = Queries(config.queries_path)
+
+    ranking = searcher.search_all(queries, k=config.k)
