@@ -1,2 +1,0 @@
-include colbert/indexing/codecs/*.cpp
-include colbert/indexing/codecs/*.cu
