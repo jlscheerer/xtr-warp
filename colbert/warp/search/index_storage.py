@@ -134,7 +134,22 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         # TODO(jlscheerer) Add un-optimized CPP/Python Implementations for comparison.
         print_message(
-            f"Loading filter_pids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+            f"Loading precompute_topk_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+        )
+        precompute_topk_centroids_cpp = load(
+            name="precompute_topk_centroids_cpp",
+            sources=[
+                os.path.join(
+                    pathlib.Path(__file__).parent.resolve(),
+                    "precompute_topk_centroids.cpp",
+                ),
+            ],
+            extra_cflags=["-O3"],
+            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+        ).precompute_topk_centroids_cpp
+
+        print_message(
+            f"Loading decompress_centroid_embeds_strided_repacked_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
         decompress_centroid_embeds_strided_repacked_cpp = load(
             name="decompress_centroid_embeds_strided_repacked_cpp",
