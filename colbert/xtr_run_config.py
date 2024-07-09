@@ -1,3 +1,4 @@
+# TODO(jlscheerer) Eventually rename this file/class.
 import os
 import json
 from dataclasses import dataclass
@@ -5,23 +6,20 @@ from typing import Literal, Optional
 import argparse
 from tqdm import tqdm
 
+from colbert import Searcher, Indexer
 from colbert.modeling.xtr import DOC_MAXLEN, QUERY_MAXLEN
 from colbert.infra import Run, RunConfig, ColBERTConfig
-from colbert import Indexer
-
 from colbert.data import Queries
-from colbert.infra import Run, RunConfig, ColBERTConfig
-from colbert import Searcher
 from colbert.utils.tracker import ExecutionTracker
 
-from index_converter import convert_index
+# TODO(jlscheerer) Fix this again.
+# from index_converter import convert_index
 
-# TODO(jlscheerer) Adapt these to be loaded from a config.yml file.
-INDEX_ROOT = "/future/u/scheerer/home/data/indexes/ColBERT-XTR"
-EXPERIMENT_ROOT = "/lfs/1/scheerer/experiments/ColBERT-XTR"
+INDEX_ROOT = os.environ["INDEX_ROOT"]
+EXPERIMENT_ROOT = os.environ["EXPERIMENT_ROOT"]
 
-BEIR_COLLECTION_PATH = "/lfs/1/scheerer/datasets/beir/datasets"
-LOTTE_COLLECTION_PATH = "/lfs/1/scheerer/datasets/lotte/lotte"
+BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
+LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
 
 
 @dataclass
@@ -152,35 +150,36 @@ def search(config: XTRRunConfig, batch_queries=True):
             return tracker
 
 
-def convert(config: XTRRunConfig):
-    index_path = os.path.join(config.index_root, config.index_name)
-    convert_index(index_path)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser("xtr_via_plaid")
-    parser.add_argument("mode")
-    parser.add_argument("-c", "--collection", required=True)
-    parser.add_argument("-s", "--split", required=True)
-    parser.add_argument("-n", "--nbits", type=int, required=True)
-
-    args = parser.parse_args()
-
-    config = XTRRunConfig(
-        nranks=4,
-        dataset="lotte",
-        collection=args.collection,
-        type_="search",
-        datasplit=args.split,
-        nbits=args.nbits,
-        k=100,
-    )
-
-    if args.mode == "search":
-        search(config, batch_queries=False)
-    elif args.mode == "index":
-        index(config)
-    elif args.mode == "convert":
-        convert(config)
-    else:
-        raise AssertionError
+# TODO(jlscheerer) Fix this again.
+# def convert(config: XTRRunConfig):
+#     index_path = os.path.join(config.index_root, config.index_name)
+#     convert_index(index_path)
+#
+#
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser("xtr_via_plaid")
+#     parser.add_argument("mode")
+#     parser.add_argument("-c", "--collection", required=True)
+#     parser.add_argument("-s", "--split", required=True)
+#     parser.add_argument("-n", "--nbits", type=int, required=True)
+#
+#     args = parser.parse_args()
+#
+#     config = XTRRunConfig(
+#         nranks=4,
+#         dataset="lotte",
+#         collection=args.collection,
+#         type_="search",
+#         datasplit=args.split,
+#         nbits=args.nbits,
+#         k=100,
+#     )
+#
+#     if args.mode == "search":
+#         search(config, batch_queries=False)
+#     elif args.mode == "index":
+#         index(config)
+#     elif args.mode == "convert":
+#         convert(config)
+#     else:
+#         raise AssertionError
