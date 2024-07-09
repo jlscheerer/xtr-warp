@@ -3,13 +3,21 @@ import jsonlines
 import os
 import sys
 
-LOTTE_COLLECTION_PATH = "/lfs/1/scheerer/datasets/lotte/lotte"
+LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
 
-def evaluate_dataset(rankings_path, dataset, split, query_type="search", k=5, data_rootdir=LOTTE_COLLECTION_PATH):
-    provenance = {'query_type': query_type, 'dataset': dataset}
+
+def evaluate_dataset(
+    rankings_path,
+    dataset,
+    split,
+    query_type="search",
+    k=5,
+    data_rootdir=LOTTE_COLLECTION_PATH,
+):
+    provenance = {"query_type": query_type, "dataset": dataset}
     data_path = os.path.join(data_rootdir, dataset, split)
     if not os.path.exists(rankings_path):
-        return {'provenance': provenance, 'metrics': {'Success@5': None}}
+        return {"provenance": provenance, "metrics": {"Success@5": None}}
     rankings = defaultdict(list)
     with open(rankings_path, "r") as f:
         for line in f:
@@ -30,9 +38,14 @@ def evaluate_dataset(rankings_path, dataset, split, query_type="search", k=5, da
             qid = int(line["qid"])
             num_total_qids += 1
             if qid not in rankings:
-                print(f"WARNING: qid {qid} not found in {rankings_path}!", file=sys.stderr)
+                print(
+                    f"WARNING: qid {qid} not found in {rankings_path}!", file=sys.stderr
+                )
                 continue
             answer_pids = set(line["answer_pids"])
             if len(set(rankings[qid][:k]).intersection(answer_pids)) > 0:
                 success += 1
-    return {'provenance': provenance, 'metrics': {'Success@5': success / num_total_qids}}
+    return {
+        "provenance": provenance,
+        "metrics": {"Success@5": success / num_total_qids},
+    }

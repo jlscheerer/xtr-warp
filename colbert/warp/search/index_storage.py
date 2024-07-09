@@ -137,29 +137,34 @@ class IndexLoaderWARP:
 
         # TODO(jlscheerer) This is a REALLY unncessarily expensive computation.
         # We should eventually move this into the index conversion.
-        print_message(f"#> Averaging centroids...")
+        kaverage_centroids = False
 
-        def decompress_centroid_embeddings(centroid_id):
-            centroid = centroids[centroid_id]
-            size = sizes_compacted[centroid_id]
-            begin, end = offsets_compacted[centroid_id : centroid_id + 2]
-            codes = codes_compacted[begin:end]
-            residuals = residuals_compacted[begin:end]
-            assert codes.shape == (size,) and residuals.shape[0] == size
+        if kaverage_centroids:
+            print_message(f"#> Averaging centroids...")
 
-            residuals_ = reversed_bit_map[residuals.long()]
-            residuals_ = decompression_lookup_table[residuals_.long()]
-            residuals_ = residuals_.reshape(residuals_.shape[0], -1)
-            residuals_ = bucket_weights[residuals_.long()]
-            embeddings = centroid + residuals_
-            return torch.nn.functional.normalize(
-                embeddings.to(torch.float32), p=2, dim=-1
-            )
+            def decompress_centroid_embeddings(centroid_id):
+                centroid = centroids[centroid_id]
+                size = sizes_compacted[centroid_id]
+                begin, end = offsets_compacted[centroid_id : centroid_id + 2]
+                codes = codes_compacted[begin:end]
+                residuals = residuals_compacted[begin:end]
+                assert codes.shape == (size,) and residuals.shape[0] == size
 
-        self.avg_centroids = torch.zeros_like(centroids)
-        for i in tqdm(range(centroids.shape[0])):
-            centroid = decompress_centroid_embeddings(i).mean(dim=0)
-            self.avg_centroids[i] = centroid
+                residuals_ = reversed_bit_map[residuals.long()]
+                residuals_ = decompression_lookup_table[residuals_.long()]
+                residuals_ = residuals_.reshape(residuals_.shape[0], -1)
+                residuals_ = bucket_weights[residuals_.long()]
+                embeddings = centroid + residuals_
+                return torch.nn.functional.normalize(
+                    embeddings.to(torch.float32), p=2, dim=-1
+                )
+
+            self.avg_centroids = torch.zeros_like(centroids)
+            for i in tqdm(range(centroids.shape[0])):
+                centroid = decompress_centroid_embeddings(i).mean(dim=0)
+                self.avg_centroids[i] = centroid
+        else:
+            self.centroids = centroids
 
         return residuals_compacted
 
@@ -252,8 +257,8 @@ class IndexScorerWARP(IndexLoaderWARP):
             # Compute the MSE
 
             tracker.begin("Candidate Generation")
-            # centroid_scores = (centroids @ Q.squeeze(0).T)
-            centroid_scores = self.avg_centroids @ Q.squeeze(0).T
+            centroid_scores = self.centroids @ Q.squeeze(0).T
+            # centroid_scores = self.avg_centroids @ Q.squeeze(0).T
 
             tracker.end("Candidate Generation")
 
@@ -283,15 +288,6 @@ class IndexScorerWARP(IndexLoaderWARP):
             # TODO(jlscheerer) Eventually just merge both into something that can be mmapped.
             candidate_pids_strided, candidate_sizes = self.codes_strided.lookup(cells)
             tracker.end("Lookup")
-
-            """
-            uniq_candidate_pids, candidate_scores = build_matrix_native(cells, candidate_pids_strided, decompressed_candidate_scores_strided, candidate_sizes, mse_estimates, nprobe, it_tracker)
-
-            it_tracker.begin("Sort")
-            candidate_scores, sorting_indices = torch.sort(candidate_scores, descending=True)
-            pids, scores = uniq_candidate_pids[sorting_indices].tolist(), candidate_scores.tolist()
-            it_tracker.end("Sort")
-            """
 
             pids, scores = self._compute_candidate_scores_native(
                 cells,
