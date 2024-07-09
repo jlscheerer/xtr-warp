@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from colbert.warp.utils.index_converter import convert_index
-from colbert.xtr_run_config import XTRRunConfig
+from colbert.warp.utils.collection_indexer import index
+from colbert.warp.config import WARPRunConfig
 
 
-def convert(config: XTRRunConfig):
+def convert(config: WARPRunConfig):
     index_path = os.path.join(config.index_root, config.index_name)
     convert_index(index_path)
 
@@ -22,7 +23,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    config = XTRRunConfig(
+    config = WARPRunConfig(
         nranks=4,
         dataset="lotte",
         collection=args.collection,
@@ -36,8 +37,7 @@ if __name__ == "__main__":
         # search(config, batch_queries=False)
         pass
     elif args.mode == "index":
-        # index(config)
-        pass
+        index(config)
     elif args.mode == "convert":
         convert(config)
     else:
