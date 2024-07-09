@@ -62,7 +62,9 @@ class Searcher:
             raise ValueError(f"Memory-mapped index can only be used with CPU!")
 
         if warp_engine:
-            self.ranker = IndexScorerWARP(self.index, use_gpu, load_index_with_mmap)
+            self.ranker = IndexScorerWARP(
+                self.index, self.config, use_gpu, load_index_with_mmap
+            )
         else:
             self.ranker = IndexScorer(self.index, use_gpu, load_index_with_mmap)
 
