@@ -2,30 +2,13 @@ import os
 import io
 
 from contextlib import redirect_stdout
+from dataclasses import dataclass
 
-from colbert.warp.config import WARPRunConfig
-from colbert.infra import Run, RunConfig
-from colbert.data import Queries, Ranking
-
+from colbert.data import Ranking
+from colbert.infra.provenance import Provenance
 from colbert.utilities.evaluation.evaluate_lotte_rankings import evaluate_dataset
 
-
-class WARPQRels:
-    def __init__(self, config):
-        self.config = config
-
-
-class WARPQueries:
-    def __init__(self, config: WARPRunConfig):
-        self.config = config
-        with Run().context(
-            RunConfig(nranks=config.nranks, experiment=config.experiment_name)
-        ):
-            self.queries = Queries(config.queries_path)
-
-    @property
-    def qrels(self):
-        return WARPQRels(self.config)
+from colbert.warp.data.queries import WARPQRels
 
 
 class WARPRanking:
@@ -50,3 +33,26 @@ class WARPRanking:
             os.remove(rankings_path)
             os.remove(f"{rankings_path}.meta")
         return results
+
+
+@dataclass
+class WARPRankingItem:
+    qid: int
+    results: list
+
+
+class WARPRankingItems:
+    def __init__(self):
+        self.data = dict()
+
+    def __iadd__(self, item):
+        assert isinstance(item, WARPRankingItem)
+        assert item.qid not in self.data
+        self.data[item.qid] = list(zip(*item.results))
+        return self
+
+    def finalize(self, searcher, provenance: Provenance):
+        ranking = Ranking(data=self.data, provenance=provenance)
+        if searcher.collection_map is not None:
+            ranking.apply_collection_map(searcher.collection_map)
+        return WARPRanking(ranking)
