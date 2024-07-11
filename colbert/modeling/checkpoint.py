@@ -19,10 +19,12 @@ class Checkpoint(ColBERT):
 
     def __new__(cls, name, colbert_config=None, verbose: int = 3, warp_config=None):
         if name == "google/xtr-base-en":
-            assert warp_config is not None
-            if warp_config.onnx is None:
+            if warp_config is None or warp_config.onnx is None:
                 xtr = build_xtr_model()
-                return XTRCheckpoint(xtr, warp_config.colbert)
+                config = colbert_config
+                if warp_config is not None:
+                    config = warp_config.colbert()
+                return XTRCheckpoint(xtr, config)
 
             model = XTROnnxModel(warp_config.onnx)
             return XTRCheckpoint(model, warp_config.colbert())

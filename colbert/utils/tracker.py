@@ -55,11 +55,12 @@ class ExecutionTracker:
         self._time_per_step[name] += tok - self._time
         self._time = None
 
-    def summary(self):
+    def summary(self, steps=None):
+        if steps is None:
+            steps = self._steps
         iteration_time = self._iter_time / self._num_iterations
         breakdown = [
-            (step, self._time_per_step[step] / self._num_iterations)
-            for step in self._steps
+            (step, self._time_per_step[step] / self._num_iterations) for step in steps
         ]
         return iteration_time, breakdown
 
@@ -84,8 +85,8 @@ class ExecutionTracker:
         assert key in self._steps
         return self._time_per_step[key] / self._num_iterations
 
-    def display(self):
-        iteration_time, breakdown = self.summary()
+    def display(self, steps=None):
+        iteration_time, breakdown = self.summary(steps)
         df = pd.DataFrame(
             {
                 "Task": [x[0] for x in breakdown],

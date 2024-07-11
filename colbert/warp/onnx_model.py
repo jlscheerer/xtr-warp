@@ -23,7 +23,7 @@ class XTROnnxQuantization(Enum):
 @dataclass
 class XTROnnxConfig:
     batch_size: int = 1
-    opset_version: int = 13
+    opset_version: int = 18
     quantization: XTROnnxQuantization = XTROnnxQuantization.NONE
 
     @property
@@ -41,9 +41,8 @@ class XTROnnxConfig:
         return f"{self.base_name}.{self.quantization.name}.onnx"
 
 
-class XTROnnxModel(torch.nn.Module):
+class XTROnnxModel:
     def __init__(self, config: XTROnnxConfig):
-        super().__init__()
         ONNX_DIR = os.environ["ONNX_MODEL_DIR"]
         XTROnnxModel._quantize_model_if_not_exists(ONNX_DIR, config)
 
@@ -51,7 +50,16 @@ class XTROnnxModel(torch.nn.Module):
         filesize = os.path.getsize(model_path) / (1024 * 1024)
 
         print(f"#> Loading XTR ONNX model from '{model_path}' ({round(filesize, 2)}MB)")
-        self.model = ort.InferenceSession(model_path)
+        sess_opts = ort.SessionOptions()
+        sess_opts.intra_op_num_threads = 1
+        sess_opts.inter_op_num_threads = 1
+        sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        sess_opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+
+        self.model = ort.InferenceSession(
+            model_path,
+            sess_opts=sess_opts,
+        )
 
         self.tokenizer = XTRTokenizer(
             AutoTokenizer.from_pretrained("google/xtr-base-en")
@@ -61,7 +69,7 @@ class XTROnnxModel(torch.nn.Module):
     def device(self):
         return torch.device("cpu")
 
-    def forward(self, input_ids, attention_mask):
+    def __call__(self, input_ids, attention_mask):
         return torch.from_numpy(
             self.model.run(
                 ["Q"],
