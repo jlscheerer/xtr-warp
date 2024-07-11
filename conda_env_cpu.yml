@@ -19,3 +19,6 @@ dependencies:
     - ujson
     - flask
     - python-dotenv
+    - onnxruntime
+    - onnxruntime_tools
+
