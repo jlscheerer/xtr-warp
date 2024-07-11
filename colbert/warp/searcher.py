@@ -11,6 +11,8 @@ from colbert import Searcher
 
 from colbert.warp.data.ranking import WARPRankingItem, WARPRankingItems
 
+from colbert.utils.tracker import NOPTracker
+
 
 class WARPSearcher:
     def __init__(self, config: WARPRunConfig):
@@ -20,7 +22,7 @@ class WARPSearcher:
         ):
             self.searcher = Searcher(
                 index=config.index_name,
-                config=config.colbert(),
+                config=config,
                 index_root=config.index_root,
                 warp_engine=True,
             )
@@ -39,32 +41,40 @@ class WARPSearcher:
         else:
             self.collection_map = None
 
-    def search_all(self, queries, k=None, batched=True):
+    def search_all(self, queries, k=None, batched=True, tracker=NOPTracker()):
+        if batched and self.config.onnx is not None:
+            print("[WARNING] Batched search_all not implemented for ONNX Configuration")
+            print("[WARNING] Falling back to batched=False")
+            batched = False
         if batched:
-            return self._search_all_batched(queries, k)
-        return self._search_all_unbatched(queries, k)
+            return self._search_all_batched(queries, k, tracker)
+        return self._search_all_unbatched(queries, k, tracker)
 
-    def _search_all_batched(self, queries, k=None):
+    def _search_all_batched(self, queries, k=None, tracker=NOPTracker()):
         if k is None:
             k = self.config.k
         if isinstance(queries, WARPQueries):
             queries = queries.queries
-        ranking = self.searcher.search_all(queries, k=k)
+        ranking = self.searcher.search_all(queries, k=k, tracker=tracker)
         if self.collection_map is not None:
             ranking.apply_collection_map(self.collection_map)
         return WARPRanking(ranking)
 
-    def _search_all_unbatched(self, queries, k=None):
+    def _search_all_unbatched(self, queries, k=None, tracker=NOPTracker()):
         if k is None:
             k = self.config.k
         results = WARPRankingItems()
         for qid, qtext in tqdm(queries):
-            results += WARPRankingItem(qid=qid, results=self.search(qtext))
+            tracker.next_iteration()
+            results += WARPRankingItem(
+                qid=qid, results=self.search(qtext, k=k, tracker=tracker)
+            )
+            tracker.end_iteration()
         return results.finalize(
             self, queries.provenance(source="Searcher::search", k=k)
         )
 
-    def search(self, query, k=None):
+    def search(self, query, k=None, tracker=NOPTracker()):
         if k is None:
             k = self.config.k
-        return self.searcher.search(query, k=k)
+        return self.searcher.search(query, k=k, tracker=tracker)
