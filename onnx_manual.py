@@ -1,21 +1,32 @@
+import os
 from dotenv import load_dotenv
+
+# Ensure we are running use CPU only!
+os.environ["CUDA_VISBLE_DEVICES"] = ""
 
 load_dotenv()
 
-from colbert.modeling.xtr import XTRCheckpoint
+from colbert.warp.data.queries import WARPQueries
+from colbert.warp.searcher import WARPSearcher
 from colbert.warp.config import WARPRunConfig
 from colbert.warp.onnx_model import (
     XTROnnxQuantization,
-    XTROnnxModel,
     XTROnnxConfig,
 )
 
 if __name__ == "__main__":
-    config = XTROnnxConfig(quantization=XTROnnxQuantization.DYN_QUANTIZED_QINT8)
-    model = XTROnnxModel(config)
-
-    run_config = WARPRunConfig(
-        nranks=4, dataset="lotte", collection="writing", datasplit="test", nbits=4
+    onnx_config = XTROnnxConfig(quantization=XTROnnxQuantization.PREPROCESS)
+    config = WARPRunConfig(
+        nranks=4,
+        type_="search",
+        dataset="lotte",
+        collection="writing",
+        datasplit="test",
+        nbits=4,
+        onnx=onnx_config,
     )
-    checkpoint = XTRCheckpoint(model, run_config.colbert())
-    print(checkpoint.queryFromText(["hello world"]))
+
+    searcher = WARPSearcher(config)
+    queries = WARPQueries(config)
+
+    searcher.search_all(queries, k=5, batched=False)

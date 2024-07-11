@@ -5,6 +5,8 @@ from typing import Literal, Optional
 from colbert.modeling.xtr import DOC_MAXLEN, QUERY_MAXLEN
 from colbert.infra import ColBERTConfig
 
+from colbert.warp.onnx_model import XTROnnxConfig
+
 INDEX_ROOT = os.environ["INDEX_ROOT"]
 EXPERIMENT_ROOT = os.environ["EXPERIMENT_ROOT"]
 
@@ -22,6 +24,8 @@ class WARPRunConfig:
 
     type_: Optional[Literal["search", "forum"]] = None
     k: int = 100
+
+    onnx: Optional[XTROnnxConfig] = None
 
     @property
     def index_root(self):

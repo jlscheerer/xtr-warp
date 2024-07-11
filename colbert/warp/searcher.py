@@ -20,7 +20,7 @@ class WARPSearcher:
         ):
             self.searcher = Searcher(
                 index=config.index_name,
-                config=config.colbert(),
+                config=config,
                 index_root=config.index_root,
                 warp_engine=True,
             )
