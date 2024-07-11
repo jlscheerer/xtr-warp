@@ -7,12 +7,6 @@ from colbert.infra import ColBERTConfig
 
 from colbert.warp.onnx_model import XTROnnxConfig
 
-INDEX_ROOT = os.environ["INDEX_ROOT"]
-EXPERIMENT_ROOT = os.environ["EXPERIMENT_ROOT"]
-
-BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
-LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
-
 
 @dataclass
 class WARPRunConfig:
@@ -29,6 +23,7 @@ class WARPRunConfig:
 
     @property
     def index_root(self):
+        INDEX_ROOT = os.environ["INDEX_ROOT"]
         return INDEX_ROOT
 
     @property
@@ -37,6 +32,8 @@ class WARPRunConfig:
 
     @property
     def collection_path(self):
+        BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
+        LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
         if self.dataset == "beir":
             return f"{BEIR_COLLECTION_PATH}/{self.collection}/collection.tsv"
         elif self.dataset == "lotte":
@@ -45,6 +42,8 @@ class WARPRunConfig:
 
     @property
     def queries_path(self):
+        BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
+        LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
         if self.dataset == "beir":
             return f"{BEIR_COLLECTION_PATH}/{self.collection}/questions.{self.datasplit}.tsv"
         elif self.dataset == "lotte":
@@ -53,6 +52,7 @@ class WARPRunConfig:
 
     @property
     def experiment_root(self):
+        EXPERIMENT_ROOT = os.environ["EXPERIMENT_ROOT"]
         return EXPERIMENT_ROOT
 
     @property

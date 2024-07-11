@@ -280,8 +280,8 @@ class IndexScorerWARP(IndexLoaderWARP):
         self, Q_mask, centroid_scores, nprobe, fill_blank, tracker
     ):
         # TODO(jlscheerer) Compute centroid_scores differently so we don't need to tranpose...
-        tracker.begin("MSE Computation")
-        tracker.end("MSE Computation")
+        # tracker.begin("MSE Computation")
+        # tracker.end("MSE Computation")
 
         tracker.begin("top-k Precompute")
         cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
@@ -331,8 +331,8 @@ class IndexScorerWARP(IndexLoaderWARP):
         k,
         tracker,
     ):
-        tracker.begin("Prepare Matrix")
-        tracker.end("Prepare Matrix")
+        # tracker.begin("Prepare Matrix")
+        # tracker.end("Prepare Matrix")
 
         tracker.begin("Build Matrix")
         pids, scores = IndexScorerWARP.compute_candidate_scores_cpp(
@@ -345,6 +345,6 @@ class IndexScorerWARP(IndexLoaderWARP):
         )
         tracker.end("Build Matrix")
 
-        tracker.begin("Sort")
-        tracker.end("Sort")
+        # tracker.begin("Sort")
+        # tracker.end("Sort")
         return pids.tolist(), scores.tolist()

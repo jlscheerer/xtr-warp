@@ -2,15 +2,17 @@ import time
 import matplotlib.pyplot as plt
 import pandas as pd
 
+
 class ExecutionTrackerIteration:
     def __init__(self, tracker):
         self._tracker = tracker
-        
+
     def __enter__(self):
         self._tracker.next_iteration()
-        
+
     def __exit__(self, exception_type, exception_value, exception_traceback):
         self._tracker.end_iteration()
+
 
 # TODO(jlscheerer) Support min/max and mode here also
 class ExecutionTracker:
@@ -33,6 +35,8 @@ class ExecutionTracker:
 
     def end_iteration(self):
         tok = time.time()
+        if self._steps != self._current_steps:
+            print(self._steps, self._current_steps)
         assert self._steps == self._current_steps
         self._iterating = False
         self._iter_time += tok - self._iter_begin
@@ -53,7 +57,10 @@ class ExecutionTracker:
 
     def summary(self):
         iteration_time = self._iter_time / self._num_iterations
-        breakdown = [(step, self._time_per_step[step] / self._num_iterations) for step in self._steps]
+        breakdown = [
+            (step, self._time_per_step[step] / self._num_iterations)
+            for step in self._steps
+        ]
         return iteration_time, breakdown
 
     def as_dict(self):
@@ -79,36 +86,51 @@ class ExecutionTracker:
 
     def display(self):
         iteration_time, breakdown = self.summary()
-        df = pd.DataFrame({
-            'Task': [x[0] for x in breakdown],
-            'Duration': [x[1] * 1000 for x in breakdown]
-        })
-        df['Start'] = df['Duration'].cumsum().shift(fill_value=0)
+        df = pd.DataFrame(
+            {
+                "Task": [x[0] for x in breakdown],
+                "Duration": [x[1] * 1000 for x in breakdown],
+            }
+        )
+        df["Start"] = df["Duration"].cumsum().shift(fill_value=0)
         fig, ax = plt.subplots(figsize=(10, 2))
-        
-        for i, task in enumerate(df['Task']):
-            start = df['Start'][i]
-            duration = df['Duration'][i]
-            ax.barh('Tasks', duration, left=start, height=0.5, label=task)
-        
-        plt.xlabel('Latency (ms)')
+
+        for i, task in enumerate(df["Task"]):
+            start = df["Start"][i]
+            duration = df["Duration"][i]
+            ax.barh("Tasks", duration, left=start, height=0.5, label=task)
+
+        plt.xlabel("Latency (ms)")
         accumulated = round(sum([x[1] for x in breakdown]) * 1000, 1)
         actual = round(iteration_time * 1000, 1)
-        plt.title(f"{self._name} (iterations={self._num_iterations}, accumulated={accumulated}ms, actual={actual}ms)")
+        plt.title(
+            f"{self._name} (iterations={self._num_iterations}, accumulated={accumulated}ms, actual={actual}ms)"
+        )
         ax.set_yticks([])
-        ax.set_ylabel('')
-        
+        ax.set_ylabel("")
+
         plt.legend()
         plt.show()
+
 
 class NOPTracker:
     def __init__(self):
         pass
 
-    def next_iteration(self): raise AssertionError
-    def begin(self, name): pass # NOP
-    def end(self, name): pass # NOP
-    def end_iteration(self): raise AssertionError
-    def summary(self): raise AssertionError
-    def display(self): raise AssertionError
+    def next_iteration(self):
+        pass
 
+    def begin(self, name):
+        pass  # NOP
+
+    def end(self, name):
+        pass  # NOP
+
+    def end_iteration(self):
+        pass
+
+    def summary(self):
+        raise AssertionError
+
+    def display(self):
+        raise AssertionError
