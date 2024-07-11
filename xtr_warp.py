@@ -9,7 +9,7 @@ load_dotenv()
 
 import json
 
-from colbert.xtr_run_config import XTRRunConfig, to_colbert_config
+from colbert.warp.config import WARPRunConfig
 from colbert.infra import Run, RunConfig
 from colbert.data import Queries
 from colbert import Searcher
@@ -17,7 +17,7 @@ from colbert import Searcher
 from evaluation.evaluate_lotte_rankings import evaluate_dataset
 
 if __name__ == "__main__":
-    config = XTRRunConfig(
+    config = WARPRunConfig(
         nranks=4,
         dataset="lotte",
         collection="writing",
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     ):
         searcher = Searcher(
             index=config.index_name,
-            config=to_colbert_config(config),
+            config=config.colbert(),
             index_root=config.index_root,
             warp_engine=True,
         )

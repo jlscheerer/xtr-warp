@@ -6,10 +6,10 @@ load_dotenv()
 
 from colbert.warp.utils.index_converter import convert_index
 from colbert.warp.utils.collection_indexer import index
-from colbert.xtr_run_config import XTRRunConfig
+from colbert.warp.config import WARPRunConfig
 
 
-def convert(config: XTRRunConfig):
+def convert(config: WARPRunConfig):
     index_path = os.path.join(config.index_root, config.index_name)
     convert_index(index_path)
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    config = XTRRunConfig(
+    config = WARPRunConfig(
         nranks=4,
         dataset="lotte",
         collection=args.collection,
