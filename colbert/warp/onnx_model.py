@@ -8,7 +8,9 @@ from onnxruntime import quantization as ort_quantization
 from onnxruntime.transformers import optimizer as transformers_optimizer
 from onnxruntime.quantization import quantize_dynamic, QuantType
 
-from colbert.modeling.xtr import QUERY_MAXLEN, build_xtr_model
+from colbert.modeling.xtr import QUERY_MAXLEN, build_xtr_model, XTRTokenizer
+
+from transformers import AutoTokenizer
 
 
 class XTROnnxQuantization(Enum):
@@ -39,8 +41,9 @@ class XTROnnxConfig:
         return f"{self.base_name}.{self.quantization.name}.onnx"
 
 
-class XTROnnxModel:
+class XTROnnxModel(torch.nn.Module):
     def __init__(self, config: XTROnnxConfig):
+        super().__init__()
         ONNX_DIR = os.environ["ONNX_MODEL_DIR"]
         XTROnnxModel._quantize_model_if_not_exists(ONNX_DIR, config)
 
@@ -49,6 +52,25 @@ class XTROnnxModel:
 
         print(f"#> Loading XTR ONNX model from '{model_path}' ({round(filesize, 2)}MB)")
         self.model = ort.InferenceSession(model_path)
+
+        self.tokenizer = XTRTokenizer(
+            AutoTokenizer.from_pretrained("google/xtr-base-en")
+        )
+
+    @property
+    def device(self):
+        return torch.device("cpu")
+
+    def forward(self, input_ids, attention_mask):
+        return torch.from_numpy(
+            self.model.run(
+                ["Q"],
+                {
+                    "input_ids": input_ids.numpy(),
+                    "attention_mask": attention_mask.numpy(),
+                },
+            )[0]
+        )
 
     @staticmethod
     def _quantize_model_if_not_exists(root_dir, config: XTROnnxConfig):
@@ -59,8 +81,12 @@ class XTROnnxModel:
             base_model = build_xtr_model()
             device = torch.device("cpu")
             input_dim = (config.batch_size, QUERY_MAXLEN)
-            attention_mask = torch.zeros(input_dim, dtype=torch.int64).to(device)
-            input_ids = torch.zeros(input_dim, dtype=torch.int64).to(device)
+            attention_mask = torch.randint(
+                low=1, high=1000, size=input_dim, dtype=torch.int64
+            ).to(device)
+            input_ids = torch.randint(
+                low=1, high=1000, size=input_dim, dtype=torch.int64
+            ).to(device)
 
             base_model.eval()
             with torch.no_grad():
