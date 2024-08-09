@@ -21,4 +21,4 @@ dependencies:
     - python-dotenv
     - onnxruntime
     - onnxruntime_tools
-
+    - coremltools

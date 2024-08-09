@@ -104,7 +104,7 @@ class XTRCheckpoint:
                 num_tokens += int(length)
 
         assert num_tokens == flatten_embeddings.shape[0]
-        return flatten_embeddings.half(), [x.item() for y in batch_lengths for x in y]
+        return flatten_embeddings, [x.item() for y in batch_lengths for x in y]
 
     def _split_into_batches(self, ids, mask, bsize):
         batches = []
