@@ -8,6 +8,7 @@ from colbert.data import Collection, Queries, Ranking
 
 from colbert.modeling.checkpoint import Checkpoint
 from colbert.search.index_storage import IndexScorer
+from colbert.warp.config import WARPRunConfig
 from colbert.warp.search.index_storage import IndexScorerWARP
 
 from colbert.infra.provenance import Provenance
@@ -35,6 +36,11 @@ class Searcher:
         if self.verbose > 1:
             print_memory_stats()
 
+        warp_config = None
+        if isinstance(config, WARPRunConfig):
+            warp_config = config
+            config = warp_config.colbert()
+
         initial_config = ColBERTConfig.from_existing(config, Run().config)
 
         default_index_root = initial_config.index_root_
@@ -52,7 +58,10 @@ class Searcher:
         self.configure(checkpoint=self.checkpoint, collection=self.collection)
 
         self.checkpoint = Checkpoint(
-            self.checkpoint, colbert_config=self.config, verbose=self.verbose
+            self.checkpoint,
+            colbert_config=self.config,
+            verbose=self.verbose,
+            warp_config=warp_config,
         )
         use_gpu = self.config.total_visible_gpus > 0
         if use_gpu:
