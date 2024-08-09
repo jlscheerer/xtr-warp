@@ -6,8 +6,10 @@ from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer
 from colbert.utils.amp import MixedPrecisionManager
 from colbert.modeling.colbert import ColBERT
 from colbert.modeling.xtr import XTRCheckpoint, build_xtr_model
+from colbert.warp.config import USE_CORE_ML
 
-from colbert.warp.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
+if USE_CORE_ML:
+    from colbert.warp.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
 from colbert.warp.onnx_model import XTROnnxConfig, XTROnnxModel
 
 
@@ -31,9 +33,10 @@ class Checkpoint(ColBERT):
                 model = XTROnnxModel(warp_config.optim)
                 return XTRCheckpoint(model, warp_config.colbert())
 
-            if isinstance(warp_config.optim, XTRCoreMLConfig):
-                model = XTRCoreMLModel(warp_config.optim)
-                return XTRCheckpoint(model, warp_config.colbert())
+            if USE_CORE_ML:
+                if isinstance(warp_config.optim, XTRCoreMLConfig):
+                    model = XTRCoreMLModel(warp_config.optim)
+                    return XTRCheckpoint(model, warp_config.colbert())
 
             # We should never reach this point!
             assert False

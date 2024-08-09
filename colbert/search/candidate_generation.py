@@ -49,7 +49,7 @@ class CandidateGeneration:
 
         Q = Q.squeeze(0)
         if self.use_gpu:
-            Q = Q.cuda().half()
+            Q = Q.cuda()
         assert Q.dim() == 2
 
         pids, centroid_scores = self.generate_candidate_pids(Q, ncells)

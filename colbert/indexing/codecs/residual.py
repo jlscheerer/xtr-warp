@@ -24,7 +24,7 @@ class ResidualCodec:
         ResidualCodec.try_load_torch_extensions(self.use_gpu)
 
         if self.use_gpu > 0:
-            self.centroids = centroids.cuda().half()
+            self.centroids = centroids.cuda()
         else:
             self.centroids = centroids.float()
         self.dim, self.nbits = config.dim, config.nbits
@@ -32,12 +32,12 @@ class ResidualCodec:
 
         if torch.is_tensor(self.avg_residual):
             if self.use_gpu:
-                self.avg_residual = self.avg_residual.cuda().half()
+                self.avg_residual = self.avg_residual.cuda()
 
         if torch.is_tensor(bucket_cutoffs):
             if self.use_gpu:
                 bucket_cutoffs = bucket_cutoffs.cuda()
-                bucket_weights = bucket_weights.half().cuda()
+                bucket_weights = bucket_weights.cuda()
 
         self.bucket_cutoffs = bucket_cutoffs
         self.bucket_weights = bucket_weights
@@ -156,7 +156,7 @@ class ResidualCodec:
         avgresidual_path = os.path.join(index_path, 'avg_residual.pt')
         buckets_path = os.path.join(index_path, 'buckets.pt')
 
-        torch.save(self.centroids.half(), centroids_path)
+        torch.save(self.centroids, centroids_path)
         torch.save((self.bucket_cutoffs, self.bucket_weights), buckets_path)
 
         if torch.is_tensor(self.avg_residual):
@@ -169,7 +169,7 @@ class ResidualCodec:
 
         for batch in embs.split(1 << 18):
             if self.use_gpu:
-                batch = batch.cuda().half()
+                batch = batch.cuda()
             codes_ = self.compress_into_codes(batch, out_device=batch.device)
             centroids_ = self.lookup_centroids(codes_, out_device=batch.device)
 
@@ -212,7 +212,7 @@ class ResidualCodec:
         bsize = (1 << 29) // self.centroids.size(0)
         for batch in embs.split(bsize):
             if self.use_gpu:
-                indices = (self.centroids @ batch.T.cuda().half()).max(dim=0).indices.to(device=out_device)
+                indices = (self.centroids @ batch.T.cuda()).max(dim=0).indices.to(device=out_device)
             else:
                 indices = (self.centroids @ batch.T.cpu().float()).max(dim=0).indices.to(device=out_device)
             codes.append(indices)
@@ -268,7 +268,7 @@ class ResidualCodec:
                 centroids_.add_(residuals_)
 
             if self.use_gpu:
-                D_ = torch.nn.functional.normalize(centroids_, p=2, dim=-1).half()
+                D_ = torch.nn.functional.normalize(centroids_, p=2, dim=-1)
             else:
                 D_ = torch.nn.functional.normalize(centroids_.to(torch.float32), p=2, dim=-1)
             D.append(D_)

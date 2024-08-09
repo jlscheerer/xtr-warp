@@ -23,7 +23,7 @@ from colbert.data.collection import Collection
 from colbert.indexing.collection_encoder import CollectionEncoder
 from colbert.indexing.index_saver import IndexSaver
 from colbert.indexing.utils import optimize_ivf
-from colbert.utils.utils import flatten, print_message
+from colbert.utils.utils import print_message
 
 from colbert.indexing.codecs.residual import ResidualCodec
 
@@ -178,7 +178,7 @@ class CollectionIndexer():
 
         Run().print(f'avg_doclen_est = {avg_doclen_est} \t len(local_sample) = {len(local_sample):,}')
 
-        torch.save(local_sample_embs.half(), os.path.join(self.config.index_path_, f'sample.{self.rank}.pt'))
+        torch.save(local_sample_embs, os.path.join(self.config.index_path_, f'sample.{self.rank}.pt'))
 
         return avg_doclen_est
 
@@ -248,7 +248,7 @@ class CollectionIndexer():
         print_memory_stats(f'***1*** \t RANK:{self.rank}')
 
         # TODO: Allocate a float16 array. Load the samples from disk, copy to array.
-        sample = torch.empty(self.num_sample_embs, self.config.dim, dtype=torch.float16)
+        sample = torch.empty(self.num_sample_embs, self.config.dim, dtype=torch.float32)
 
         offset = 0
         for r in range(self.nranks):
@@ -305,7 +305,7 @@ class CollectionIndexer():
 
         centroids = torch.nn.functional.normalize(centroids, dim=-1)
         if self.use_gpu:
-            centroids = centroids.half()
+            centroids = centroids.float()
         else:
             centroids = centroids.float()
 
@@ -364,10 +364,9 @@ class CollectionIndexer():
                 # Encode passages into embeddings with the checkpoint model
                 embs, doclens = self.encoder.encode_passages(passages) 
                 if self.use_gpu:
-                    assert embs.dtype == torch.float16
+                    assert embs.dtype == torch.float32
                 else:
                     assert embs.dtype == torch.float32
-                    embs = embs.half()
                 if self.verbose > 1:
                     Run().print_main(f"#> Saving chunk {chunk_idx}: \t {len(passages):,} passages "
                                     f"and {embs.size(0):,} embeddings. From #{offset:,} onward.")
@@ -499,7 +498,8 @@ class CollectionIndexer():
 
 def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, shared_lists, return_value_queue=None):
     use_gpu = torch.cuda.is_available()
-    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, gpu=use_gpu, verbose=True, seed=123)
+    kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, spherical=True,
+                          gpu=use_gpu, verbose=True, seed=123)
 
     sample = shared_lists[0][0]
     sample = sample.float().numpy()

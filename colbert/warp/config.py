@@ -5,9 +5,15 @@ from typing import Literal, Optional, Union
 from colbert.modeling.xtr import DOC_MAXLEN, QUERY_MAXLEN
 from colbert.infra import ColBERTConfig
 
-from colbert.warp.onnx_model import XTROnnxConfig
-from colbert.warp.coreml_model import XTRCoreMLConfig
+USE_CORE_ML = False
 
+from colbert.warp.onnx_model import XTROnnxConfig
+
+if USE_CORE_ML:
+    from colbert.warp.coreml_model import XTRCoreMLConfig
+    OptimConfig = Union[XTROnnxConfig, XTRCoreMLConfig]
+else:
+    OptimConfig = XTROnnxConfig
 
 @dataclass
 class WARPRunConfig:
@@ -20,7 +26,7 @@ class WARPRunConfig:
     type_: Optional[Literal["search", "forum"]] = None
     k: int = 100
 
-    optim: Optional[Union[XTROnnxConfig, XTRCoreMLConfig]] = None
+    optim: Optional[OptimConfig] = None
 
     @property
     def index_root(self):
