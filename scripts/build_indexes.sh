@@ -1,5 +1,15 @@
 #!/usr/bin/bash
 
+set -o allexport
+source .env set
+set +o allexport
+
+# Prepare the BEIR datasets for evaluation
+BEIR=("nfcorpus" "fiqa" "scidocs" "scifact")
+for dataset in "${BEIR[@]}"; do
+    python utility/extract_collection.py -i "${BEIR_COLLECTION_PATH}${dataset}" -s test
+done
+
 # Build Indexes for BEIR/test (nbits=4)
 BEIR=("nfcorpus" "fiqa" "scidocs" "scifact")
 for dataset in "${BEIR[@]}"; do
