@@ -85,7 +85,7 @@ class ExecutionTracker:
         assert key in self._steps
         return self._time_per_step[key] / self._num_iterations
 
-    def display(self, steps=None):
+    def display(self, steps=None, bound=None):
         iteration_time, breakdown = self.summary(steps)
         df = pd.DataFrame(
             {
@@ -109,6 +109,9 @@ class ExecutionTracker:
         )
         ax.set_yticks([])
         ax.set_ylabel("")
+
+        if bound is not None:
+            ax.set_xlim([0, bound])
 
         plt.legend()
         plt.show()

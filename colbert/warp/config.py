@@ -1,11 +1,12 @@
 import os
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from colbert.modeling.xtr import DOC_MAXLEN, QUERY_MAXLEN
 from colbert.infra import ColBERTConfig
 
 from colbert.warp.onnx_model import XTROnnxConfig
+from colbert.warp.coreml_model import XTRCoreMLConfig
 
 
 @dataclass
@@ -19,7 +20,7 @@ class WARPRunConfig:
     type_: Optional[Literal["search", "forum"]] = None
     k: int = 100
 
-    onnx: Optional[XTROnnxConfig] = None
+    optim: Optional[Union[XTROnnxConfig, XTRCoreMLConfig]] = None
 
     @property
     def index_root(self):

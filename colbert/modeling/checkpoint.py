@@ -3,11 +3,12 @@ import torch
 from tqdm import tqdm
 
 from colbert.modeling.tokenization import QueryTokenizer, DocTokenizer
-from colbert.warp.onnx_model import XTROnnxModel
 from colbert.utils.amp import MixedPrecisionManager
 from colbert.modeling.colbert import ColBERT
-
 from colbert.modeling.xtr import XTRCheckpoint, build_xtr_model
+
+from colbert.warp.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
+from colbert.warp.onnx_model import XTROnnxConfig, XTROnnxModel
 
 
 class Checkpoint(ColBERT):
@@ -19,15 +20,23 @@ class Checkpoint(ColBERT):
 
     def __new__(cls, name, colbert_config=None, verbose: int = 3, warp_config=None):
         if name == "google/xtr-base-en":
-            if warp_config is None or warp_config.onnx is None:
+            if warp_config is None or warp_config.optim is None:
                 xtr = build_xtr_model()
                 config = colbert_config
                 if warp_config is not None:
                     config = warp_config.colbert()
                 return XTRCheckpoint(xtr, config)
 
-            model = XTROnnxModel(warp_config.onnx)
-            return XTRCheckpoint(model, warp_config.colbert())
+            if isinstance(warp_config.optim, XTROnnxConfig):
+                model = XTROnnxModel(warp_config.optim)
+                return XTRCheckpoint(model, warp_config.colbert())
+
+            if isinstance(warp_config.optim, XTRCoreMLConfig):
+                model = XTRCoreMLModel(warp_config.optim)
+                return XTRCheckpoint(model, warp_config.colbert())
+
+            # We should never reach this point!
+            assert False
         instance = super().__new__(cls)
         instance.__init__(name, colbert_config, verbose)
         return instance
