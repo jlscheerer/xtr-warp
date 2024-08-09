@@ -22,3 +22,4 @@ dependencies:
     - onnxruntime
     - onnxruntime_tools
     - coremltools
+    - beir
