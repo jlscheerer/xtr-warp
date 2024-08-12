@@ -11,6 +11,7 @@ from colbert.warp.config import USE_CORE_ML
 if USE_CORE_ML:
     from colbert.warp.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
 from colbert.warp.onnx_model import XTROnnxConfig, XTROnnxModel
+from colbert.warp.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
 
 
 class Checkpoint(ColBERT):
@@ -31,6 +32,10 @@ class Checkpoint(ColBERT):
 
             if isinstance(warp_config.optim, XTROnnxConfig):
                 model = XTROnnxModel(warp_config.optim)
+                return XTRCheckpoint(model, warp_config.colbert())
+
+            if isinstance(warp_config.optim, XTROpenVinoConfig):
+                model = XTROpenVinoModel(warp_config.optim)
                 return XTRCheckpoint(model, warp_config.colbert())
 
             if USE_CORE_ML:

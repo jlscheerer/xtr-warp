@@ -303,6 +303,8 @@ class IndexScorerWARP(IndexLoaderWARP):
     def _decompress_centroid_embeds_native_strided_repacked(
         self, Q, centroid_ids, centroid_scores, nprobe
     ):
+        # TODO(jlscheerer) Invetigate why this is necessary (platform dependent?)
+        centroid_ids = centroid_ids.long()
         begins = self.offsets_compacted[centroid_ids]
         ends = self.offsets_compacted[centroid_ids + 1]
 

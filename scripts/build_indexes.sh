@@ -1,5 +1,6 @@
 #!/usr/bin/bash
 
+: '
 set -o allexport
 source .env set
 set +o allexport
@@ -15,6 +16,7 @@ BEIR=("nfcorpus" "fiqa" "scidocs" "scifact")
 for dataset in "${BEIR[@]}"; do
     python utils.py index -c beir -d "$dataset" -s test -n 4
 done
+'
 
 # Build Indexes for LoTTE.search/test (nbits=4)
 LoTTE=("writing" "recreation" "science" "technology" "lifestyle" "pooled")
