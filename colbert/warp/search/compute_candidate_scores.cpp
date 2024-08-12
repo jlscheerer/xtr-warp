@@ -9,8 +9,6 @@
 
 #include <unordered_map>
 
-#include <arm_neon.h>
-
 #include "flat_hash_map.hpp"
 
 std::tuple<torch::Tensor, torch::Tensor> compute_candidate_scores(
@@ -86,16 +84,13 @@ std::tuple<torch::Tensor, torch::Tensor> compute_candidate_scores(
   std::vector<std::pair<float, int32_t>> candidate_scores(ncandidates);
   at::parallel_for(0, ncandidates, 0, [&](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
-      float32x4_t sum = vdupq_n_f32(0);
-      for (int j = 0; j < 32; j += 4) {
-        float32x4_t scores = vld1q_f32(&score_matrix[32 * i + j]);
-        float32x4_t mse = vld1q_f32(&mse_estimates_arr[j]);
-        uint32x4_t mask = vceqq_f32(scores, vdupq_n_f32(0));
-        float32x4_t adjusted_scores = vbslq_f32(mask, mse, scores);
-        sum = vaddq_f32(sum, adjusted_scores);
+      float sum = 0.0f;
+      for (int j = 0; j < 32; ++j) {
+        float score = score_matrix[32 * i + j];
+        float mse = mse_estimates_arr[j];
+        sum += (score == 0.0f) ? mse : score;
       }
-      float32x2_t sum2 = vadd_f32(vget_low_f32(sum), vget_high_f32(sum));
-      const float score = vget_lane_f32(vpadd_f32(sum2, sum2), 0);
+      const float score = sum;
       const int32_t pid = rev_index_map[i];
       candidate_scores[i] = {score, pid};
     }

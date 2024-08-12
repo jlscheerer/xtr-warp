@@ -5,6 +5,8 @@
 #include <numeric>
 #include <vector>
 
+#include <immintrin.h>
+
 /*
 decompression_table refers to "decomp2", i.e., a compacted version of the
 original. Also the decompression_table will be flattened to prevent memory

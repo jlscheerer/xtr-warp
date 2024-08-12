@@ -18,13 +18,16 @@ else:
 @dataclass
 class WARPRunConfig:
     nranks: int
+    nbits: int
+    
     dataset: Literal["beir", "lotte"]
     collection: str
     datasplit: Literal["train", "dev", "test"]
-    nbits: int
-
     type_: Optional[Literal["search", "forum"]] = None
+
     k: int = 100
+    nprobe: Optional[int] = None
+    t_prime: Optional[int] = None
 
     optim: Optional[OptimConfig] = None
 
@@ -69,6 +72,7 @@ class WARPRunConfig:
     def colbert(self):
         return ColBERTConfig(
             nbits=self.nbits,
+            ncells=self.nprobe,
             doc_maxlen=DOC_MAXLEN,
             query_maxlen=QUERY_MAXLEN,
             index_path=f"{self.index_root}/{self.index_name}",

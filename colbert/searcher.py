@@ -73,7 +73,7 @@ class Searcher:
         self.warp_engine = warp_engine
         if warp_engine:
             self.ranker = IndexScorerWARP(
-                self.index, self.config, use_gpu, load_index_with_mmap
+                self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime
             )
         else:
             self.ranker = IndexScorer(self.index, use_gpu, load_index_with_mmap)
@@ -115,6 +115,7 @@ class Searcher:
         filter_fn=None,
         full_length_search=False,
         qid_to_pids=None,
+        show_progress=True
     ):
         queries = Queries.cast(queries)
         queries_ = list(queries.values())
@@ -122,10 +123,10 @@ class Searcher:
         Q = self.encode(queries_, full_length_search=full_length_search)
 
         return self._search_all_Q(
-            queries, Q, k, filter_fn=filter_fn, qid_to_pids=qid_to_pids
+            queries, Q, k, filter_fn=filter_fn, qid_to_pids=qid_to_pids, show_progress=show_progress
         )
 
-    def _search_all_Q(self, queries, Q, k, filter_fn=None, qid_to_pids=None):
+    def _search_all_Q(self, queries, Q, k, filter_fn=None, qid_to_pids=None, show_progress=True):
         qids = list(queries.keys())
 
         if qid_to_pids is None:
@@ -142,7 +143,7 @@ class Searcher:
                     )
                 )
             )
-            for query_idx, qid in tqdm(enumerate(qids))
+            for query_idx, qid in tqdm(enumerate(qids), disable=not show_progress)
         ]
 
         data = {qid: val for qid, val in zip(queries.keys(), all_scored_pids)}

@@ -34,37 +34,37 @@ class WARPSearcher:
             with open(collection_map_path, "r") as file:
                 collection_map = json.load(file)
                 collection_map = {
-                    int(key): int(value) for key, value in collection_map.items()
+                    int(key): value for key, value in collection_map.items()
                 }
             print(f"#> Loading collection_map found in {config.collection_path}")
             self.collection_map = collection_map
         else:
             self.collection_map = None
 
-    def search_all(self, queries, k=None, batched=True, tracker=NOPTracker()):
+    def search_all(self, queries, k=None, batched=True, tracker=NOPTracker(), show_progress=True):
         if batched and self.config.onnx is not None:
             print("[WARNING] Batched search_all not implemented for ONNX Configuration")
             print("[WARNING] Falling back to batched=False")
             batched = False
         if batched:
-            return self._search_all_batched(queries, k, tracker)
-        return self._search_all_unbatched(queries, k, tracker)
+            return self._search_all_batched(queries, k, tracker, show_progress=show_progress)
+        return self._search_all_unbatched(queries, k, tracker, show_progress=show_progress)
 
-    def _search_all_batched(self, queries, k=None, tracker=NOPTracker()):
+    def _search_all_batched(self, queries, k=None, tracker=NOPTracker(), show_progress=True):
         if k is None:
             k = self.config.k
         if isinstance(queries, WARPQueries):
             queries = queries.queries
-        ranking = self.searcher.search_all(queries, k=k, tracker=tracker)
+        ranking = self.searcher.search_all(queries, k=k, tracker=tracker, show_progress=show_progress)
         if self.collection_map is not None:
             ranking.apply_collection_map(self.collection_map)
         return WARPRanking(ranking)
 
-    def _search_all_unbatched(self, queries, k=None, tracker=NOPTracker()):
+    def _search_all_unbatched(self, queries, k=None, tracker=NOPTracker(), show_progress=True):
         if k is None:
             k = self.config.k
         results = WARPRankingItems()
-        for qid, qtext in tqdm(queries):
+        for qid, qtext in tqdm(queries, disable=not show_progress):
             tracker.next_iteration()
             results += WARPRankingItem(
                 qid=qid, results=self.search(qtext, k=k, tracker=tracker)

@@ -1,7 +1,9 @@
 import os
 from dataclasses import dataclass
-import torch
 from enum import Enum, auto
+
+import torch
+from transformers import AutoTokenizer
 
 import onnxruntime as ort
 from onnxruntime import quantization as ort_quantization
@@ -10,7 +12,6 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 
 from colbert.modeling.xtr import QUERY_MAXLEN, build_xtr_model, XTRTokenizer
 
-from transformers import AutoTokenizer
 
 
 class XTROnnxQuantization(Enum):
@@ -23,7 +24,7 @@ class XTROnnxQuantization(Enum):
 @dataclass
 class XTROnnxConfig:
     batch_size: int = 1
-    opset_version: int = 18
+    opset_version: int = 16
     quantization: XTROnnxQuantization = XTROnnxQuantization.NONE
 
     @property

@@ -498,6 +498,7 @@ class CollectionIndexer():
 
 def compute_faiss_kmeans(dim, num_partitions, kmeans_niters, shared_lists, return_value_queue=None):
     use_gpu = torch.cuda.is_available()
+    Run().print_main("#> use_gpu =", use_gpu)
     kmeans = faiss.Kmeans(dim, num_partitions, niter=kmeans_niters, spherical=True,
                           gpu=use_gpu, verbose=True, seed=123)
 
