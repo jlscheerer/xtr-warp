@@ -25,3 +25,6 @@ dependencies:
     - coremltools
     - beir
     - tabulate
+    - openvino
+    - matplotlib
+    - jsonlines
