@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from itertools import product
 from tqdm import tqdm
+from math import log2
 
 from colbert.infra.config.config import ColBERTConfig
 from colbert.utils.tracker import NOPTracker
@@ -12,6 +13,10 @@ from colbert.utils.utils import print_message
 
 from torch.utils.cpp_extension import load
 
+def round_in_steps(x):
+    if x <= 10_000: # Round to next 1000 for below 10k
+        return max(int(round(x / 1_000, 0)) * 1_000, 1_000)
+    return max(int(round(x / 50_000, 0)) * 50_000, 10_000)
 
 class IndexLoaderWARP:
     def __init__(
@@ -35,6 +40,7 @@ class IndexLoaderWARP:
         ) = self._load_buckets(config.nbits)
 
         # TODO(jlscheerer) Just directly emit torch tensors during conversion.
+        # TODO(jlscheerer) We don't need to load the residuals_compacted
         residuals_compacted = self._load_codec(
             reversed_bit_map, decompression_lookup_table, bucket_weights
         )
@@ -134,6 +140,7 @@ class IndexLoaderWARP:
         kaverage_centroids = True
 
         if kaverage_centroids:
+            # TODO(jlscheerer) No need to load avg_centroids.pt anymore, should be mean now!
             self.avg_centroids = torch.load(
                 os.path.join(self.index_path, "avg_centroids.pt")
             )
@@ -150,6 +157,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         config: ColBERTConfig,
         use_gpu=False,
         load_index_with_mmap=False,
+        t_prime=None
     ):
         assert not use_gpu
         assert not load_index_with_mmap
@@ -163,6 +171,22 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         IndexScorerWARP.try_load_torch_extensions(use_gpu)
 
+        (ncentroids, _) = self.avg_centroids.shape
+        (nembeds, _) = self.residuals_repacked_compacted_df.shape
+
+        if config.ncells is not None:
+            self.nprobe = config.ncells
+        else:
+            self.nprobe = max(6 * max(int(log2(ncentroids)) - 14, 1), 12)
+
+        if t_prime is not None:
+            self.t_prime = t_prime
+        else:
+            avg_embeds_per_centroid = nembeds / ncentroids
+            self.t_prime = round_in_steps(40 * avg_embeds_per_centroid)
+
+        print("nprobe", self.nprobe, "t_prime", self.t_prime)
+
         # self.ivf_strided = StridedTensor(
         #     self.codes_compacted, self.sizes_compacted, use_gpu=self.use_gpu
         # )
@@ -171,6 +195,10 @@ class IndexScorerWARP(IndexLoaderWARP):
     def try_load_torch_extensions(cls, use_gpu):
         if hasattr(cls, "loaded_extensions") or use_gpu:
             return
+
+        cflags = [
+            "-O3", "-mavx2", "-mfma", "-march=native", "-ffast-math", "-fno-math-errno"
+        ]
 
         # TODO(jlscheerer) Add un-optimized CPP/Python Implementations for comparison.
         print_message(
@@ -184,7 +212,7 @@ class IndexScorerWARP(IndexLoaderWARP):
                     "precompute_topk_centroids.cpp",
                 ),
             ],
-            extra_cflags=["-O3"],
+            extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
         ).precompute_topk_centroids_cpp
 
@@ -199,7 +227,7 @@ class IndexScorerWARP(IndexLoaderWARP):
                     "decompress_centroid_embeds_strided_repacked.cpp",
                 ),
             ],
-            extra_cflags=["-O3"],
+            extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
         ).decompress_centroid_embeds_strided_repacked_cpp
 
@@ -214,7 +242,7 @@ class IndexScorerWARP(IndexLoaderWARP):
                     "compute_candidate_scores.cpp",
                 ),
             ],
-            extra_cflags=["-O3"],
+            extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
         ).compute_candidate_scores_cpp
 
@@ -224,26 +252,23 @@ class IndexScorerWARP(IndexLoaderWARP):
         assert filter_fn is None
         assert pids is None
 
-        # TODO(jlscheerer) Move this back into the config.
-        nprobe = 12  # config.ncells
-
+        nprobe = self.nprobe
+        t_prime = self.t_prime
         with torch.inference_mode():
             # Compute the MSE
-
             tracker.begin("Candidate Generation")
             # centroid_scores = self.centroids @ Q.squeeze(0).T
             centroid_scores = self.avg_centroids @ Q.squeeze(0).T
 
             tracker.end("Candidate Generation")
 
-            fill_blank = 10_000
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
             (
                 cells,
                 centroid_scores,
                 mse_estimates,
             ) = self._precompute_topk_centroids_native(
-                Q_mask, centroid_scores, nprobe, fill_blank, tracker
+                Q_mask, centroid_scores, nprobe, t_prime, tracker
             )
 
             tracker.begin("Decompression")
@@ -277,7 +302,7 @@ class IndexScorerWARP(IndexLoaderWARP):
             return pids, scores
 
     def _precompute_topk_centroids_native(
-        self, Q_mask, centroid_scores, nprobe, fill_blank, tracker
+        self, Q_mask, centroid_scores, nprobe, t_prime, tracker
     ):
         # TODO(jlscheerer) Compute centroid_scores differently so we don't need to tranpose...
         # tracker.begin("MSE Computation")
@@ -285,7 +310,7 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         tracker.begin("top-k Precompute")
         cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
-            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, fill_blank
+            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, t_prime
         )
 
         cells = cells.flatten().contiguous()  # (32 * nprobe,)

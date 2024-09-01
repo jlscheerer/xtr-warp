@@ -48,6 +48,5 @@ class XTROpenVinoModel:
     def __call__(self, input_ids, attention_mask):
         self.infer_request.set_input_tensor(0, ov.Tensor(input_ids.numpy()))
         self.infer_request.set_input_tensor(1, ov.Tensor(attention_mask.numpy()))
-        return torch.from_numpy(
-            self.infer_request.infer()["encodings"]
-        )
+        result = self.infer_request.infer()
+        return torch.from_numpy(result[0])

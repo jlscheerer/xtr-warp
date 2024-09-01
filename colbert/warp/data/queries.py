@@ -1,3 +1,6 @@
+import os
+from beir.datasets.data_loader import GenericDataLoader
+
 from colbert.warp.config import WARPRunConfig
 from colbert.infra import Run, RunConfig
 from colbert.data import Queries
@@ -7,7 +10,11 @@ from colbert.infra.provenance import Provenance
 class WARPQRels:
     def __init__(self, config):
         self.config = config
-
+        if self.config.dataset == "beir":
+            BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
+            dataset_path = os.path.join(BEIR_COLLECTION_PATH, self.config.collection)
+            corpus, queries, qrels = GenericDataLoader(dataset_path).load(split="test")
+            self.qrels = qrels
 
 class WARPQueries:
     def __init__(self, config: WARPRunConfig):
