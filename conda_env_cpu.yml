@@ -5,6 +5,7 @@ channels:
   - defaults
 dependencies:
   - python=3.8
+  - gxx
   - faiss-cpu
   - pip=21.0
   - pytorch-cpu=1.13
