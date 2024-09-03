@@ -5,8 +5,11 @@ load_dotenv()
 
 from colbert.warp.config import WARPRunConfig
 
-DATASETS = ["beir.scifact", "beir.scidocs", "beir.fiqa", "lotte.lifestyle",
+DATASETS = ["beir.nfcorpus", "beir.scifact", "beir.scidocs",
+            "beir.fiqa", "beir.webis-touche2020", "beir.quora",
+            "lotte.lifestyle", "lotte.recreation", "lotte.writing", 
             "lotte.technology", "lotte.science", "lotte.pooled"]
+NBITS_VALUES = [2, 4]
 
 WARP_FILES = [
     "bucket_weights.npy", "centroids.npy", "sizes.compacted.pt",
@@ -38,30 +41,31 @@ def plaid_index_size(index_path):
 def bytes_to_gib(size):
     return size / (1024 * 1024 * 1024)
 
-for collection_dataset in DATASETS:
-    collection, dataset = collection_dataset.split(".")
-    # TODO(jlscheerer) Introduce consistent naming for collection/dataset
-    config = WARPRunConfig(
-        nranks=4,
-        dataset=collection,
-        collection=dataset,
-        type_="search" if collection == "lotte" else None,
-        datasplit="test",
-        nbits=4,
-        k=100,
-        optim=None
-    )
-    index_path = config.colbert().index_path
+for nbits in NBITS_VALUES:
+    for collection_dataset in DATASETS:
+        collection, dataset = collection_dataset.split(".")
+        # TODO(jlscheerer) Introduce consistent naming for collection/dataset
+        config = WARPRunConfig(
+            nranks=4,
+            dataset=collection,
+            collection=dataset,
+            type_="search" if collection == "lotte" else None,
+            datasplit="test",
+            nbits=nbits,
+            k=100,
+            optim=None
+        )
+        index_path = config.colbert().index_path
 
-    try:
-        warp_size = bytes_to_gib(warp_index_size(index_path))
-    except:
-        warp_size = "-"
+        try:
+            warp_size = bytes_to_gib(warp_index_size(index_path))
+        except:
+            warp_size = "-"
 
-    try:
-        plaid_size = bytes_to_gib(plaid_index_size(index_path))
-    except:
-        plaid_size = "-"
+        try:
+            plaid_size = bytes_to_gib(plaid_index_size(index_path))
+        except:
+            plaid_size = "-"
 
-    print(collection_dataset, "XTR/WARP", warp_size, "GiB")
-    print(collection_dataset, "ColBERTv2/PLAID", plaid_size, "GiB")
+        print(f"nbits={nbits}", collection_dataset, "XTR/WARP", warp_size, "GiB")
+        print(f"nbits={nbits}", collection_dataset, "ColBERTv2/PLAID", plaid_size, "GiB")

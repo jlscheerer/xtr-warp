@@ -183,42 +183,26 @@ def convert_index(index_path, destination_path=None):
         list(product(list(range(len(bucket_weights))), repeat=keys_per_byte))
     ).to(torch.uint8)
 
-    # TODO(jlscheerer) NOTE This requires nbits=4!
     residuals_repacked_compacted = reversed_bit_map[tensor_compacted_residuals.long()]
     residuals_repacked_compacted_d = decompression_lookup_table[
         residuals_repacked_compacted.long()
     ]
-    residuals_repacked_compacted_df = (
-        2**4 * residuals_repacked_compacted_d[:, :, 0]
-        + residuals_repacked_compacted_d[:, :, 1]
-    )
+    # TODO(jlscheerer) We could generalize this to (arbitrary) powers of two.
+    # But there are presumably not too many variants anyway...
+    if nbits == 4:
+        residuals_repacked_compacted_df = (
+            2**4 * residuals_repacked_compacted_d[:, :, 0]
+            + residuals_repacked_compacted_d[:, :, 1]
+        )
+    elif nbits == 2:
+        residuals_repacked_compacted_df = (
+            2**6 * residuals_repacked_compacted_d[:, :, 0]
+            + 2**4 * residuals_repacked_compacted_d[:, :, 1]
+            + 2**2 * residuals_repacked_compacted_d[:, :, 2]
+            + residuals_repacked_compacted_d[:, :, 3]
+        )
+    else: assert False
     torch.save(
         residuals_repacked_compacted_df,
         os.path.join(destination_path, "residuals.repacked.compacted.pt"),
     )
-
-    print("> Averaging centroids")
-    offsets_compacted = torch.zeros((num_partitions + 1,), dtype=torch.long)
-    torch.cumsum(centroid_sizes, dim=0, out=offsets_compacted[1:])
-
-    def decompress_centroid_embeddings(centroid_id):
-        centroid = centroids[centroid_id]
-        size = centroid_sizes[centroid_id]
-        begin, end = offsets_compacted[centroid_id : centroid_id + 2]
-        codes = tensor_compacted_codes[begin:end]
-        residuals = tensor_compacted_residuals[begin:end]
-        assert codes.shape == (size,) and residuals.shape[0] == size
-
-        residuals_ = reversed_bit_map[residuals.long()]
-        residuals_ = decompression_lookup_table[residuals_.long()]
-        residuals_ = residuals_.reshape(residuals_.shape[0], -1)
-        residuals_ = bucket_weights[residuals_.long()]
-        embeddings = centroid + residuals_
-        return torch.nn.functional.normalize(embeddings.to(torch.float32), p=2, dim=-1)
-
-    avg_centroids = torch.zeros_like(centroids)
-    for i in tqdm(range(centroids.shape[0])):
-        centroid = decompress_centroid_embeddings(i).mean(dim=0)
-        avg_centroids[i] = centroid
-
-    torch.save(avg_centroids, os.path.join(destination_path, "avg_centroids.pt"))
