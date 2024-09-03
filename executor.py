@@ -74,6 +74,7 @@ def execute_config(config):
         dataset=collection,
         collection=dataset,
         datasplit=split,
+        type_="search" if collection == "lotte" else None,
         nbits=nbits,
         optim=optim,
     )
