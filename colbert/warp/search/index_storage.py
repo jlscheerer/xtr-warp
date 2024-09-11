@@ -154,11 +154,17 @@ class IndexScorerWARP(IndexLoaderWARP):
             self.t_prime = int(np.sqrt(8 * nembeddings) / 1000) * 1000
         else: self.t_prime = T_PRIME_MAX
 
-        print("nprobe", self.nprobe, "t_prime", self.t_prime)
+        if config.nbits == 2:
+            self.decompress_centroids = IndexScorerWARP.decompress_centroids_2
+        elif config.nbits == 4:
+            self.decompress_centroids =  IndexScorerWARP.decompress_centroids_4
+        else: assert False
+
+        print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
 
         # TODO(jlscheerer) Determine the bound automatically
         # This should be set in accordance with the average number...
-        self.bound = 96
+        self.bound = 128
 
     @classmethod
     def try_load_torch_extensions(cls, use_gpu):
@@ -189,19 +195,20 @@ class IndexScorerWARP(IndexLoaderWARP):
         ).precompute_topk_centroids_cpp
 
         print_message(
-            f"Loading decompress_centroid_embeds_strided_repacked_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+            f"Loading decompress_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        cls.decompress_centroid_embeds_strided_repacked_cpp = load(
-            name="decompress_centroid_embeds_strided_repacked_cpp",
-            sources=[
-                os.path.join(
-                    pathlib.Path(__file__).parent.resolve(),
-                    "decompress_centroid_embeds_strided_repacked.cpp",
-                ),
-            ],
-            extra_cflags=cflags,
-            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        ).decompress_centroid_embeds_strided_repacked_cpp
+        for nbits in [2, 4]:
+            setattr(cls, f"decompress_centroids_{nbits}", load(
+                name="decompress_centroids_cpp",
+                sources=[
+                    os.path.join(
+                        pathlib.Path(__file__).parent.resolve(),
+                        "decompress_centroids.cpp",
+                    ),
+                ],
+                extra_cflags=cflags + [f"-DNBITS={nbits}"],
+                verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+            ).decompress_centroids_cpp)
 
         print_message(
             f"Loading compute_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
@@ -298,13 +305,12 @@ class IndexScorerWARP(IndexLoaderWARP):
     def _decompress_centroid_embeds_native_strided_repacked(
         self, Q, centroid_ids, centroid_scores, nprobe
     ):
-        # TODO(jlscheerer) Invetigate why this is necessary (platform dependent?)
         centroid_ids = centroid_ids.long()
         begins = self.offsets_compacted[centroid_ids]
         ends = self.offsets_compacted[centroid_ids + 1]
 
         sizes = ends - begins
-        results = IndexScorerWARP.decompress_centroid_embeds_strided_repacked_cpp(
+        results = self.decompress_centroids(
             begins,
             ends,
             sizes,
