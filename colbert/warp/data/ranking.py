@@ -1,15 +1,51 @@
 import os
-import io
 import pytrec_eval
+import sys
 
-from contextlib import redirect_stdout
 from dataclasses import dataclass
 
 from colbert.data import Ranking
 from colbert.infra.provenance import Provenance
-from colbert.utilities.evaluation.evaluate_lotte_rankings import evaluate_dataset
 
 from colbert.warp.data.queries import WARPQRels
+
+def _success_at_k_lotte(expected, rankings, k):
+    num_total_qids, success = 0, 0
+    for qid, answer_pids in expected.data.items():
+        num_total_qids += 1
+        if str(qid) not in rankings.data:
+            print(f"WARNING: qid {qid} not found in {rankings}!", file=sys.stderr)
+            continue
+        qid_rankings = set(map(lambda x: x[0], rankings.data[str(qid)][:k]))
+        if len(qid_rankings.intersection(answer_pids)) > 0:
+            success += 1
+    return success / num_total_qids
+
+
+def _recall_at_k_lotte(expected, rankings, k):
+    avg, num_relevant = 0, 0
+    for qid, answer_pids in expected.data.items():
+        if str(qid) not in rankings.data:
+            print(f"WARNING: qid {qid} not found in {rankings}!", file=sys.stderr)
+            continue
+        relevant_count = len(answer_pids)
+        if relevant_count == 0:
+            continue
+        num_relevant += 1
+        qid_rankings = set(map(lambda x: x[0], rankings.data[str(qid)][:k]))
+        correct_count = len(answer_pids & qid_rankings)
+        avg += correct_count / relevant_count
+    return avg / num_relevant
+
+def eval_metrics_lotte(qas, rankings, k):
+    K_VALUES = [5, 10, 100, 1000]
+    final_metrics = dict()
+    for k in K_VALUES:
+        final_metrics[f"success@{k}"] = _success_at_k_lotte(expected=qas, rankings=rankings.ranking, k=k)
+        final_metrics[f"recall@{k}"] = _recall_at_k_lotte(expected=qas, rankings=rankings.ranking, k=k)
+    return {
+        "metrics": final_metrics
+    }
 
 def eval_metrics_beir(qrels, rankings):
     K_VALUES = [5, 10, 50, 100]
@@ -54,25 +90,9 @@ class WARPRanking:
     def __init__(self, ranking: Ranking):
         self.ranking = ranking
 
-    def evaluate(self, qrels: WARPQRels, k: int, cleanup: bool = True):
+    def evaluate(self, qrels: WARPQRels, k: int):
         if qrels.config.dataset == "lotte":
-            _ = io.StringIO()
-            with redirect_stdout(_):
-                rankings_path = self.ranking.save(
-                    f"{qrels.config.index_name}.split={qrels.config.datasplit}.ranking.k={k}.tsv"
-                )
-                assert qrels.config.dataset == "lotte"
-                results = evaluate_dataset(
-                    rankings_path,
-                    qrels.config.collection,
-                    split=qrels.config.datasplit,
-                    k=k,
-                )
-            del _
-            if cleanup:
-                os.remove(rankings_path)
-                os.remove(f"{rankings_path}.meta")
-            return results
+            return eval_metrics_lotte(qrels.qas, self, k=5)
         else:
             assert qrels.config.dataset == "beir"
             return eval_metrics_beir(qrels, self)

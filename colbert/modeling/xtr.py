@@ -4,11 +4,7 @@ from transformers import AutoTokenizer, AutoModel, logging
 from huggingface_hub import hf_hub_download
 
 from colbert.parameters import DEVICE
-
-TOKEN_EMBED_DIM = 128
-QUERY_MAXLEN = 32
-DOC_MAXLEN = 512
-TOKEN_EMBED_DIM = 128
+from colbert.warp.constants import *
 
 
 class XTRTokenizer:

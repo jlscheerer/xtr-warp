@@ -26,7 +26,7 @@ class WARPRunConfig:
     type_: Optional[Literal["search", "forum"]] = None
 
     k: int = 100
-    nprobe: Optional[int] = None
+    nprobe: int = 16
     t_prime: Optional[int] = None
 
     optim: Optional[OptimConfig] = None

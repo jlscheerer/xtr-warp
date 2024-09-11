@@ -53,7 +53,7 @@ std::tuple<torch::Tensor, torch::Tensor> compute_candidate_scores(
   torch::Tensor result_candidate_pids = torch::zeros({nresults}, torch::kInt32);
   auto candidate_pids_accessor = result_candidate_pids.accessor<int32_t, 1>();
 
-#pragma omp parallel for
+  // TODO(jlscheerer) Introduce parallelism here again.
   for (int i = 0; i < nscores; ++i) {
     const int32_t candidate_pid = candidate_pids_strided_accessor[i];
     const float candidate_score =
@@ -70,7 +70,6 @@ std::tuple<torch::Tensor, torch::Tensor> compute_candidate_scores(
       curr_candidate_sz = candidate_sizes_accessor[++curr_candidate_sz_idx];
     }
 
-#pragma omp atomic
     score_matrix[32 * local_pid + local_qid] =
         std::max(score_matrix[32 * local_pid + local_qid], candidate_score);
   }

@@ -1,11 +1,29 @@
 import os
 from beir.datasets.data_loader import GenericDataLoader
+import jsonlines
+from collections import OrderedDict
 
 from colbert.warp.config import WARPRunConfig
 from colbert.infra import Run, RunConfig
 from colbert.data import Queries
 from colbert.infra.provenance import Provenance
 
+class WARPQas:
+    def __init__(self, num_total_qids, data):
+        super().__init__()
+        self.num_total_qids = num_total_qids
+        self.data = data
+
+def _load_qas_lotte(qas_path):
+    qas = OrderedDict()
+    num_total_qids = 0
+    with jsonlines.open(qas_path, mode="r") as f:
+        for line in f:
+            qid = int(line["qid"])
+            num_total_qids += 1
+            answer_pids = set(line["answer_pids"])
+            qas[qid] = answer_pids
+    return WARPQas(num_total_qids=num_total_qids, data=dict(qas))
 
 class WARPQRels:
     def __init__(self, config):
@@ -13,8 +31,13 @@ class WARPQRels:
         if self.config.dataset == "beir":
             BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
             dataset_path = os.path.join(BEIR_COLLECTION_PATH, self.config.collection)
-            corpus, queries, qrels = GenericDataLoader(dataset_path).load(split="test")
+            corpus, queries, qrels = GenericDataLoader(dataset_path).load(split=self.config.datasplit)
             self.qrels = qrels
+        elif self.config.dataset == "lotte":
+            LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
+            dataset_path = os.path.join(LOTTE_COLLECTION_PATH, self.config.collection, self.config.datasplit)
+            qas_path = os.path.join(dataset_path, f"qas.{self.config.type_}.jsonl")
+            self.qas = _load_qas_lotte(qas_path)
 
 class WARPQueries:
     def __init__(self, config: WARPRunConfig):
