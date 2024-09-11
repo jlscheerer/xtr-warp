@@ -104,8 +104,9 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
       const int32_t pid = codes_accessor[begin + inner_idx];
       const auto &residual = residuals_accessor[begin + inner_idx];
 
-      const float score = centroid_score + decompression_kernel<nbits>(residual, bucket_scores_accessor);
-      // scores_accessor[roffset + inner_idx] = centroid_score + score;
+      const float score = centroid_score + decompression_kernel<nbits>(
+        residual, bucket_scores_accessor
+      );
       // NOTE directly perform deduplication/max-reduction within the cluster.
       if (prev_pid != pid || score > prev_score) {
         pos += (prev_pid != pid);
