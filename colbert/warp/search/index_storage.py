@@ -3,20 +3,14 @@ import pathlib
 import torch
 import numpy as np
 from itertools import product
-from tqdm import tqdm
-from math import log2
 
 from colbert.infra.config.config import ColBERTConfig
 from colbert.utils.tracker import NOPTracker
 from colbert.search.strided_tensor import StridedTensor
 from colbert.utils.utils import print_message
+from colbert.warp.constants import T_PRIME_MAX
 
 from torch.utils.cpp_extension import load
-
-def round_in_steps(x):
-    if x <= 10_000: # Round to next 1000 for below 10k
-        return max(int(round(x / 1_000, 0)) * 1_000, 1_000)
-    return max(int(round(x / 50_000, 0)) * 50_000, 10_000)
 
 class IndexLoaderWARP:
     def __init__(
@@ -39,19 +33,12 @@ class IndexLoaderWARP:
             bucket_weights,
         ) = self._load_buckets(config.nbits)
 
-        # TODO(jlscheerer) Just directly emit torch tensors during conversion.
-        # TODO(jlscheerer) We don't need to load the residuals_compacted
-        residuals_compacted = self._load_codec(
-            reversed_bit_map, decompression_lookup_table, bucket_weights
-        )
+        self._load_codec()
 
-        # TODO(jlscheerer) This is a REALLY unncessarily expensive computation.
-        # We should eventually move this into the index conversion.
         print_message(f"#> Loading repacked residuals...")
         self.residuals_repacked_compacted_df = torch.load(
             os.path.join(self.index_path, "residuals.repacked.compacted.pt")
         )
-        # residuals_repacked_strided = StridedTensor(residuals_repacked_compacted_df, sizes_compacted, use_gpu=False)
 
     def _load_buckets(self, nbits: int):
         print_message(f"#> Loading buckets...")
@@ -60,13 +47,8 @@ class IndexLoaderWARP:
             np.load(os.path.join(self.index_path, "bucket_weights.npy"))
         )
 
-        # bucket_cutoffs = torch.from_numpy(
-        #     np.load(os.path.join(self.index_path, "bucket_cutoffs.npy"))
-        # )
-
         self.bucket_weights = bucket_weights
 
-        # TODO(jlscheerer) We could just directly store this as part of the index.
         reversed_bit_map = []
         mask = (1 << nbits) - 1
         for i in range(256):
@@ -97,8 +79,7 @@ class IndexLoaderWARP:
 
         return reversed_bit_map, decompression_lookup_table, bucket_weights
 
-    # TODO(jlscheerer) We really don't need all of these arguments once we directly emit the correct index.
-    def _load_codec(self, reversed_bit_map, decompression_lookup_table, bucket_weights):
+    def _load_codec(self):
         print_message(f"#> Loading codec...")
 
         centroids = torch.from_numpy(
@@ -135,17 +116,8 @@ class IndexLoaderWARP:
         # Hacky way to force low number of candidates for small entries
         self.kdummy_centroid = sizes_compacted.argmin().item()
 
-        # TODO(jlscheerer) This is a REALLY unncessarily expensive computation.
-        # We should eventually move this into the index conversion.
-        kaverage_centroids = True
-
-        if kaverage_centroids:
-            # TODO(jlscheerer) No need to load avg_centroids.pt anymore, should be mean now!
-            self.avg_centroids = torch.load(
-                os.path.join(self.index_path, "avg_centroids.pt")
-            )
-        else:
-            self.centroids = centroids
+        self.centroids = centroids
+        print("#> Not averaging centroids.")
 
         return residuals_compacted
 
@@ -171,33 +143,33 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         IndexScorerWARP.try_load_torch_extensions(use_gpu)
 
-        (ncentroids, _) = self.avg_centroids.shape
-        (nembeds, _) = self.residuals_repacked_compacted_df.shape
+        assert config.ncells is not None
+        self.nprobe = config.ncells
 
-        if config.ncells is not None:
-            self.nprobe = config.ncells
-        else:
-            self.nprobe = max(6 * max(int(log2(ncentroids)) - 14, 1), 12)
-
+        (ncentroids, _) = self.centroids.shape
         if t_prime is not None:
             self.t_prime = t_prime
-        else:
-            avg_embeds_per_centroid = nembeds / ncentroids
-            self.t_prime = round_in_steps(40 * avg_embeds_per_centroid)
+        elif ncentroids <= 2**16:
+            (nembeddings, _) = self.residuals_repacked_compacted_df.shape
+            self.t_prime = int(np.sqrt(8 * nembeddings) / 1000) * 1000
+        else: self.t_prime = T_PRIME_MAX
 
         print("nprobe", self.nprobe, "t_prime", self.t_prime)
 
-        # self.ivf_strided = StridedTensor(
-        #     self.codes_compacted, self.sizes_compacted, use_gpu=self.use_gpu
-        # )
+        # TODO(jlscheerer) Determine the bound automatically
+        # This should be set in accordance with the average number...
+        self.bound = 96
 
     @classmethod
     def try_load_torch_extensions(cls, use_gpu):
         if hasattr(cls, "loaded_extensions") or use_gpu:
             return
 
+        # -ffast-math -msse -msse2 -msse3 -msse4.1 -mbmi2 -mmmx -mavx -mavx2 -fomit-frame-pointer -m64 -fopenmp
         cflags = [
-            "-O3", "-mavx2", "-mfma", "-march=native", "-ffast-math", "-fno-math-errno"
+            "-O3", "-mavx2", "-mfma", "-march=native", "-ffast-math", "-fno-math-errno", "-m64", "-fopenmp", "-std=c++17",
+            "-funroll-loops", "-msse", "-msse2", "-msse3", "-msse4.1", "-mbmi2", "-mmmx", "-mavx", "-fomit-frame-pointer",
+            "-fno-strict-aliasing"
         ]
 
         # TODO(jlscheerer) Add un-optimized CPP/Python Implementations for comparison.
@@ -258,7 +230,7 @@ class IndexScorerWARP(IndexLoaderWARP):
             # Compute the MSE
             tracker.begin("Candidate Generation")
             # centroid_scores = self.centroids @ Q.squeeze(0).T
-            centroid_scores = self.avg_centroids @ Q.squeeze(0).T
+            centroid_scores = self.centroids @ Q.squeeze(0).T
 
             tracker.end("Candidate Generation")
 
@@ -283,8 +255,6 @@ class IndexScorerWARP(IndexLoaderWARP):
             tracker.end("Decompression")
 
             tracker.begin("Lookup")
-            # TODO(jlscheerer) Investigate: this seems to be slower than the naive version!
-            # TODO(jlscheerer) Eventually just merge both into something that can be mmapped.
             candidate_pids_strided, candidate_sizes = self.codes_strided.lookup(cells)
             tracker.end("Lookup")
 
@@ -310,7 +280,7 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         tracker.begin("top-k Precompute")
         cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
-            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, t_prime
+            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, t_prime, self.bound
         )
 
         cells = cells.flatten().contiguous()  # (32 * nprobe,)

@@ -89,11 +89,13 @@ def execute_config(config):
     queries = WARPQueries(warp_config)
     
     if collection == "beir":
-        rankings = searcher.search_all(queries, k=100, batched=False, show_progress=True)
-        metrics = rankings.evaluate(queries.qrels, k=100)
+        k = 100
+        rankings = searcher.search_all(queries, k=k, batched=False, show_progress=True)
+        metrics = rankings.evaluate(queries.qrels, k=k)
     elif collection == "lotte":
-        rankings = searcher.search_all(queries, k=5, batched=False, show_progress=True)
-        metrics = rankings.evaluate(queries.qrels, k=5)["metrics"]
+        k = 1000
+        rankings = searcher.search_all(queries, k=k, batched=False, show_progress=True)
+        metrics = rankings.evaluate(queries.qrels, k=k)["metrics"]
     else: assert False
 
     statistics = {
@@ -101,6 +103,9 @@ def execute_config(config):
         "embeddings": searcher.searcher.ranker.residuals_repacked_compacted_df.shape[0],
         "median_size": searcher.searcher.ranker.sizes_compacted.median().item()
     }
+
+    config["nprobe"] = searcher.searcher.ranker.nprobe
+    config["t_prime"] = searcher.searcher.ranker.t_prime
 
     return {
         "metrics": metrics,
@@ -130,11 +135,11 @@ if __name__ == "__main__":
 
     OUTPUT_FILE = f"experiments/results/{config_data['name']}.json"
     DATASETS = config_data["datasets"]
-    NBITS_VALUES = config_data["nbits"]
-    NPROBE_VALUES = config_data["nprobe"]
-    T_PRIME_VALUES = config_data["t_prime"]
-    BOUND = config_data["bound"]
-    DATASPLIT = config_data["datasplit"]
+    NBITS_VALUES = config_data.get("nbits", 4)
+    NPROBE_VALUES = config_data.get("nprobe", None)
+    T_PRIME_VALUES = config_data.get("t_prime", None)
+    BOUND = config_data.get("bound", None)
+    DATASPLIT = config_data.get("datasplit", "dev")
 
     if not OVERWRITE:
         assert not os.path.exists(OUTPUT_FILE)
