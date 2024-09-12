@@ -12,7 +12,8 @@ constexpr uint8_t nbits = NBITS;
 
 template<int8_t nbits>
 float inline __attribute__((always_inline)) decompression_kernel(
-        const uint8_t *__restrict residual, const float *__restrict bucket_scores) {
+    const torch::TensorAccessor<uint8_t, 1> &residual,
+    const float *__restrict bucket_scores) {
     static_assert(nbits == 2 || nbits == 4);
     constexpr int packed_vals_per_byte = 8 / nbits;
     constexpr int packed_dim = dim / packed_vals_per_byte;
@@ -78,20 +79,14 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
     const int nprobe) {
   torch::NoGradGuard no_grad;
   torch::InferenceMode guard;
-  static_assert(nbits == 2 || nbits == 4);
-  constexpr int packed_vals_per_byte = 8 / nbits;
-  constexpr int packed_dim = dim / packed_vals_per_byte;
 
   const int ncells = begins.size(0);
   const int64_t *begins_ptr = begins.data_ptr<int64_t>();
   const int64_t *sizes_ptr = sizes.data_ptr<int64_t>();
   const float *centroids_ptr = centroid_scores.data_ptr<float>();
-
-  std::vector<int64_t> offsets(ncells);
-  std::partial_sum(sizes_ptr, sizes_ptr + ncells - 1, offsets.begin() + 1);
-
-  const uint8_t *residuals_ptr = residuals_compacted.data_ptr<uint8_t>();
   const int32_t *codes_ptr = codes_compacted.data_ptr<int32_t>();
+
+  const auto residuals_accessor = residuals_compacted.accessor<uint8_t, 2>();
 
   const int64_t numel = sizes.sum().item<int64_t>();
   torch::Tensor stride_sizes = torch::zeros({ncells}, torch::kInt32);
@@ -102,13 +97,12 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
     sizes, stride_sizes, pids, scores
   );
 
-  constexpr uint8_t packed_dim_shift = __builtin_ctz(packed_dim); // log2(packed_dim)
   for (int cell_idx = 0; cell_idx < ncells; ++cell_idx) {
     const int begin = begins_ptr[cell_idx];
     const int n = sizes_ptr[cell_idx];
-    const int64_t roffset = offsets[cell_idx];
     const float centroid_score = centroids_ptr[cell_idx];
 
+    // NOTE we could also just do a single multiplication independent of nprobe.
     const auto bucket_scores = torch::matmul(
         Q[cell_idx / nprobe].unsqueeze(1), bucket_weights.unsqueeze(0));
     const float *bucket_scores_ptr = bucket_scores.data_ptr<float>();
@@ -117,7 +111,7 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
     int32_t pos = -1, prev_pid = -1; float prev_score = 0;
     for (int inner_idx = 0; inner_idx < n; ++inner_idx) {
       const int32_t pid = codes_ptr[begin + inner_idx];
-      const uint8_t *residual = residuals_ptr + ((begin + inner_idx) << packed_dim_shift);
+      const auto &residual = residuals_accessor[begin + inner_idx];
 
       const float score = centroid_score + decompression_kernel<nbits>(
         residual, bucket_scores_ptr
