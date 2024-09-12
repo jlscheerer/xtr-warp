@@ -19,64 +19,23 @@ class IndexLoaderWARP:
         use_gpu=True,
         load_index_with_mmap=False,
     ):
-        assert not use_gpu
-        assert not load_index_with_mmap
+        assert not use_gpu and not load_index_with_mmap
 
         self.index_path = index_path
         self.use_gpu = use_gpu
         self.load_index_with_mmap = load_index_with_mmap
 
-        (
-            reversed_bit_map,
-            decompression_lookup_table,
-            bucket_weights,
-        ) = self._load_buckets(config.nbits)
-
-        self._load_codec()
-
-        print_message(f"#> Loading repacked residuals...")
-        self.residuals_repacked_compacted_df = torch.load(
-            os.path.join(self.index_path, "residuals.repacked.compacted.pt")
-        )
-
-    def _load_buckets(self, nbits: int):
         print_message(f"#> Loading buckets...")
-
         bucket_weights = torch.from_numpy(
             np.load(os.path.join(self.index_path, "bucket_weights.npy"))
         )
-
         self.bucket_weights = bucket_weights
 
-        reversed_bit_map = []
-        mask = (1 << nbits) - 1
-        for i in range(256):
-            # The reversed byte
-            z = 0
-            for j in range(8, 0, -nbits):
-                # Extract a subsequence of length n bits
-                x = (i >> (j - nbits)) & mask
-
-                # Reverse the endianness of each bit subsequence (e.g. 10 -> 01)
-                y = 0
-                for k in range(nbits - 1, -1, -1):
-                    y += ((x >> (nbits - k - 1)) & 1) * (2**k)
-
-                # Set the corresponding bits in the output byte
-                z |= y
-                if j > nbits:
-                    z <<= nbits
-            reversed_bit_map.append(z)
-        reversed_bit_map = torch.tensor(reversed_bit_map).to(torch.uint8)
-
-        # A table of all possible lookup orders into bucket_weights
-        # given n bits per lookup
-        keys_per_byte = 8 // nbits
-        decompression_lookup_table = torch.tensor(
-            list(product(list(range(len(bucket_weights))), repeat=keys_per_byte))
-        ).to(torch.uint8)
-
-        return reversed_bit_map, decompression_lookup_table, bucket_weights
+        self._load_codec()
+        print_message(f"#> Loading repacked residuals...")
+        self.residuals_compacted = torch.load(
+            os.path.join(self.index_path, "residuals.repacked.compacted.pt")
+        )
 
     def _load_codec(self):
         print_message(f"#> Loading codec...")
@@ -95,22 +54,20 @@ class IndexLoaderWARP:
             os.path.join(self.index_path, "residuals.compacted.pt")
         )
 
-        ncentroids = centroids.shape[0]
-        assert sizes_compacted.shape == (ncentroids,)
+        num_centroids = centroids.shape[0]
+        assert sizes_compacted.shape == (num_centroids,)
 
-        nembeddings = residuals_compacted.shape[0]
-        assert sizes_compacted.sum() == nembeddings
-        assert codes_compacted.shape == (nembeddings,)
+        num_embeddings = residuals_compacted.shape[0]
+        assert sizes_compacted.sum() == num_embeddings
+        assert codes_compacted.shape == (num_embeddings,)
 
         self.sizes_compacted = sizes_compacted
         self.codes_compacted = codes_compacted
 
-        offsets_compacted = torch.zeros((ncentroids + 1,), dtype=torch.long)
+        offsets_compacted = torch.zeros((num_centroids + 1,), dtype=torch.long)
         torch.cumsum(sizes_compacted, dim=0, out=offsets_compacted[1:])
         self.offsets_compacted = offsets_compacted
 
-        # TODO(jlscheerer) Make this more elegant by introducing a skip_mask
-        # Hacky way to force low number of candidates for small entries
         self.kdummy_centroid = sizes_compacted.argmin().item()
 
         self.centroids = centroids
@@ -143,12 +100,12 @@ class IndexScorerWARP(IndexLoaderWARP):
         assert config.ncells is not None
         self.nprobe = config.ncells
 
-        (ncentroids, _) = self.centroids.shape
+        (num_centroids, _) = self.centroids.shape
         if t_prime is not None:
             self.t_prime = t_prime
-        elif ncentroids <= 2**16:
-            (nembeddings, _) = self.residuals_repacked_compacted_df.shape
-            self.t_prime = int(np.sqrt(8 * nembeddings) / 1000) * 1000
+        elif num_centroids <= 2**16:
+            (num_embeddings, _) = self.residuals_compacted.shape
+            self.t_prime = int(np.sqrt(8 * num_embeddings) / 1000) * 1000
         else: self.t_prime = T_PRIME_MAX
 
         assert config.nbits in [2, 4]
@@ -156,8 +113,8 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
 
-        # TODO(jlscheerer) Determine the bound automatically
-        # This should be set in accordance with the average number...
+        # NOTE To be more efficient, we could also derive this from the dataset.
+        #      For now we just set it to a sufficiently high constant value.
         self.bound = 128
 
     @classmethod
@@ -224,8 +181,6 @@ class IndexScorerWARP(IndexLoaderWARP):
         assert filter_fn is None
         assert pids is None
 
-        nprobe = self.nprobe
-        t_prime = self.t_prime
         with torch.inference_mode():
             tracker.begin("Candidate Generation")
             centroid_scores = Q.squeeze(0) @ self.centroids.T
@@ -234,19 +189,15 @@ class IndexScorerWARP(IndexLoaderWARP):
             tracker.begin("top-k Precompute")
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
             cells, centroid_scores, mse_estimates = self._warp_select_centroids(
-                Q_mask, centroid_scores, nprobe, t_prime
+                Q_mask, centroid_scores, self.nprobe, self.t_prime
             )
             tracker.end("top-k Precompute")
 
             tracker.begin("Decompression")
             capacities, candidate_sizes, candidate_pids, candidate_scores = self._decompress_centroids(
-                Q.squeeze(0), cells, centroid_scores, nprobe
+                Q.squeeze(0), cells, centroid_scores, self.nprobe
             )
             tracker.end("Decompression")
-
-            # TODO(jlscheerer) Remove this again.
-            tracker.begin("Lookup")
-            tracker.end("Lookup")
 
             tracker.begin("Build Matrix")
             pids, scores = self._merge_candidate_scores(
@@ -265,7 +216,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         scores = scores.flatten().contiguous()
 
         # NOTE Skip decompression of cells with a zero score centroid.
-        # This means that the corresponding query tokens was 0. 
+        # This means that the corresponding query token was 0.0 (i.e., masked out). 
         cells[scores == 0] = self.kdummy_centroid
 
         return cells, scores, mse
@@ -280,7 +231,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         capacities = ends - begins
         sizes, pids, scores = IndexScorerWARP.decompress_centroids_cpp[self.nbits](
             begins, ends, capacities, centroid_scores, self.codes_compacted,
-            self.residuals_repacked_compacted_df, self.bucket_weights, Q, nprobe
+            self.residuals_compacted, self.bucket_weights, Q, nprobe
         )
         return capacities, sizes, pids, scores
 
