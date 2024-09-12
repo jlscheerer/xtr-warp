@@ -189,18 +189,19 @@ class IndexScorerWARP(IndexLoaderWARP):
             f"Loading decompress_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
         cls.decompress_centroids_cpp = dict()
-        for nbits in [2, 4]:
-            cls.decompress_centroids_cpp[nbits] = load(
-                name="decompress_centroids_dedup_cpp",
-                sources=[
-                    os.path.join(
-                        pathlib.Path(__file__).parent.resolve(),
-                        "decompress_centroids_dedup.cpp",
-                    ),
-                ],
-                extra_cflags=cflags + [f"-DNBITS={nbits}"],
-                verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-            ).decompress_centroids_dedup_cpp
+        decompress_centroids_cpp = load(
+            name="decompress_centroids_cpp",
+            sources=[
+                os.path.join(
+                    pathlib.Path(__file__).parent.resolve(),
+                    "decompress_centroids.cpp",
+                ),
+            ],
+            extra_cflags=cflags,
+            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+        )
+        cls.decompress_centroids_cpp[2] = decompress_centroids_cpp.decompress_centroids_2_cpp
+        cls.decompress_centroids_cpp[4] = decompress_centroids_cpp.decompress_centroids_4_cpp
 
         print_message(
             f"Loading merge_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
