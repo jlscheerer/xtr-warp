@@ -170,15 +170,12 @@ class IndexScorerWARP(IndexLoaderWARP):
     def try_load_torch_extensions(cls, use_gpu):
         if hasattr(cls, "loaded_extensions") or use_gpu:
             return
-
-        # -ffast-math -msse -msse2 -msse3 -msse4.1 -mbmi2 -mmmx -mavx -mavx2 -fomit-frame-pointer -m64 -fopenmp
         cflags = [
             "-O3", "-mavx2", "-mfma", "-march=native", "-ffast-math", "-fno-math-errno", "-m64", "-fopenmp", "-std=c++17",
             "-funroll-loops", "-msse", "-msse2", "-msse3", "-msse4.1", "-mbmi2", "-mmmx", "-mavx", "-fomit-frame-pointer",
             "-fno-strict-aliasing"
         ]
 
-        # TODO(jlscheerer) Add un-optimized CPP/Python Implementations for comparison.
         print_message(
             f"Loading precompute_topk_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
@@ -234,11 +231,8 @@ class IndexScorerWARP(IndexLoaderWARP):
         nprobe = self.nprobe
         t_prime = self.t_prime
         with torch.inference_mode():
-            # Compute the MSE
             tracker.begin("Candidate Generation")
-            # centroid_scores = self.centroids @ Q.squeeze(0).T
-            centroid_scores = self.centroids @ Q.squeeze(0).T
-
+            centroid_scores = Q.squeeze(0) @ self.centroids.T
             tracker.end("Candidate Generation")
 
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
@@ -251,8 +245,6 @@ class IndexScorerWARP(IndexLoaderWARP):
             )
 
             tracker.begin("Decompression")
-            # Decompression
-            # NOTE: This is a significant speed-up compared to the naive approach.
             (
                 decompressed_candidate_scores_strided,
                 decompressed_sizes,
@@ -281,16 +273,12 @@ class IndexScorerWARP(IndexLoaderWARP):
     def _precompute_topk_centroids_native(
         self, Q_mask, centroid_scores, nprobe, t_prime, tracker
     ):
-        # TODO(jlscheerer) Compute centroid_scores differently so we don't need to tranpose...
-        # tracker.begin("MSE Computation")
-        # tracker.end("MSE Computation")
-
         tracker.begin("top-k Precompute")
         cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
-            Q_mask, centroid_scores.T, self.sizes_compacted, nprobe, t_prime, self.bound
+            Q_mask, centroid_scores, self.sizes_compacted, nprobe, t_prime, self.bound
         )
 
-        cells = cells.flatten().contiguous()  # (32 * nprobe,)
+        cells = cells.flatten().contiguous()
         centroid_scores = centroid_scores.flatten().contiguous()
 
         # NOTE This SIGNIFICANTLY IMPROVES performance, because we don't unnecessarily do decompression
@@ -334,9 +322,6 @@ class IndexScorerWARP(IndexLoaderWARP):
         k,
         tracker,
     ):
-        # tracker.begin("Prepare Matrix")
-        # tracker.end("Prepare Matrix")
-
         tracker.begin("Build Matrix")
         pids, scores = IndexScorerWARP.compute_candidate_scores_cpp(
             candidate_pids_strided,
@@ -347,7 +332,4 @@ class IndexScorerWARP(IndexLoaderWARP):
             k,
         )
         tracker.end("Build Matrix")
-
-        # tracker.begin("Sort")
-        # tracker.end("Sort")
         return pids.tolist(), scores.tolist()
