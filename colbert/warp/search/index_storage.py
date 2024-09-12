@@ -6,7 +6,6 @@ from itertools import product
 
 from colbert.infra.config.config import ColBERTConfig
 from colbert.utils.tracker import NOPTracker
-from colbert.search.strided_tensor import StridedTensor
 from colbert.utils.utils import print_message
 from colbert.warp.constants import T_PRIME_MAX
 
@@ -104,9 +103,7 @@ class IndexLoaderWARP:
         assert codes_compacted.shape == (nembeddings,)
 
         self.sizes_compacted = sizes_compacted
-        self.codes_strided = StridedTensor(
-            codes_compacted, sizes_compacted, use_gpu=self.use_gpu
-        )
+        self.codes_compacted = codes_compacted
 
         offsets_compacted = torch.zeros((ncentroids + 1,), dtype=torch.long)
         torch.cumsum(sizes_compacted, dim=0, out=offsets_compacted[1:])
@@ -154,11 +151,8 @@ class IndexScorerWARP(IndexLoaderWARP):
             self.t_prime = int(np.sqrt(8 * nembeddings) / 1000) * 1000
         else: self.t_prime = T_PRIME_MAX
 
-        if config.nbits == 2:
-            self.decompress_centroids = IndexScorerWARP.decompress_centroids_2
-        elif config.nbits == 4:
-            self.decompress_centroids =  IndexScorerWARP.decompress_centroids_4
-        else: assert False
+        assert config.nbits in [2, 4]
+        self.nbits = config.nbits
 
         print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
 
@@ -194,33 +188,34 @@ class IndexScorerWARP(IndexLoaderWARP):
         print_message(
             f"Loading decompress_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
+        cls.decompress_centroids_cpp = dict()
         for nbits in [2, 4]:
-            setattr(cls, f"decompress_centroids_{nbits}", load(
-                name="decompress_centroids_cpp",
+            cls.decompress_centroids_cpp[nbits] = load(
+                name="decompress_centroids_dedup_cpp",
                 sources=[
                     os.path.join(
                         pathlib.Path(__file__).parent.resolve(),
-                        "decompress_centroids.cpp",
+                        "decompress_centroids_dedup.cpp",
                     ),
                 ],
                 extra_cflags=cflags + [f"-DNBITS={nbits}"],
                 verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-            ).decompress_centroids_cpp)
+            ).decompress_centroids_dedup_cpp
 
         print_message(
-            f"Loading compute_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+            f"Loading merge_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        cls.compute_candidate_scores_cpp = load(
-            name="compute_candidate_scores_cpp",
+        cls.merge_candidate_scores_cpp = load(
+            name="merge_candidate_scores_cpp",
             sources=[
                 os.path.join(
                     pathlib.Path(__file__).parent.resolve(),
-                    "compute_candidate_scores.cpp",
+                    "merge_candidate_scores.cpp",
                 ),
             ],
             extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        ).compute_candidate_scores_cpp
+        ).merge_candidate_scores_cpp
 
         cls.loaded_extensions = True
 
@@ -243,28 +238,20 @@ class IndexScorerWARP(IndexLoaderWARP):
             tracker.end("top-k Precompute")
 
             tracker.begin("Decompression")
-            (
-                decompressed_candidate_scores_strided,
-                decompressed_sizes,
-            ) = self._decompress_centroid_embeds_native_strided_repacked(
+            capacities, candidate_sizes, candidate_pids, candidate_scores = self._decompress_centroids(
                 Q.squeeze(0), cells, centroid_scores, nprobe
             )
             tracker.end("Decompression")
 
+            # TODO(jlscheerer) Remove this again.
             tracker.begin("Lookup")
-            candidate_pids_strided, candidate_sizes = self.codes_strided.lookup(cells)
             tracker.end("Lookup")
 
-            pids, scores = self._compute_candidate_scores_native(
-                cells,
-                candidate_pids_strided,
-                decompressed_candidate_scores_strided,
-                candidate_sizes,
-                mse_estimates,
-                nprobe,
-                k,
-                tracker,
+            tracker.begin("Build Matrix")
+            pids, scores = self._merge_candidate_scores(
+                capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, k
             )
+            tracker.end("Build Matrix")
 
             return pids, scores
 
@@ -282,46 +269,24 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         return cells, scores, mse
 
-    def _decompress_centroid_embeds_native_strided_repacked(
+    def _decompress_centroids(
         self, Q, centroid_ids, centroid_scores, nprobe
     ):
         centroid_ids = centroid_ids.long()
         begins = self.offsets_compacted[centroid_ids]
         ends = self.offsets_compacted[centroid_ids + 1]
 
-        sizes = ends - begins
-        results = self.decompress_centroids(
-            begins,
-            ends,
-            sizes,
-            centroid_scores,
-            self.residuals_repacked_compacted_df,
-            self.bucket_weights,
-            Q,
-            nprobe,
+        capacities = ends - begins
+        sizes, pids, scores = IndexScorerWARP.decompress_centroids_cpp[self.nbits](
+            begins, ends, capacities, centroid_scores, self.codes_compacted,
+            self.residuals_repacked_compacted_df, self.bucket_weights, Q, nprobe
         )
+        return capacities, sizes, pids, scores
 
-        return results, sizes
-
-    def _compute_candidate_scores_native(
-        self,
-        cells,
-        candidate_pids_strided,
-        decompressed_candidate_scores_strided,
-        candidate_sizes,
-        mse_estimates,
-        nprobe,
-        k,
-        tracker,
+    def _merge_candidate_scores(
+        self, capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, k
     ):
-        tracker.begin("Build Matrix")
-        pids, scores = IndexScorerWARP.compute_candidate_scores_cpp(
-            candidate_pids_strided,
-            decompressed_candidate_scores_strided,
-            candidate_sizes,
-            mse_estimates,
-            nprobe,
-            k,
+        pids, scores = IndexScorerWARP.merge_candidate_scores_cpp(
+            capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, self.nprobe, k
         )
-        tracker.end("Build Matrix")
         return pids.tolist(), scores.tolist()
