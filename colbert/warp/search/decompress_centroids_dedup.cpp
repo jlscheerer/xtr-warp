@@ -95,17 +95,23 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
     sizes, stride_sizes, pids, scores
   );
 
+  // NOTE Perform a single matrix-vector multiplication for the entire decompression.
+  const auto vt_bucket_scores = torch::matmul(
+    Q.unsqueeze(2), bucket_weights.unsqueeze(0)
+  );
+  const float *vt_bucket_scores_ptr = vt_bucket_scores.data_ptr<float>();
+  
   // NOTE This is equivalent to log2(packed_dim) as packed_dim is a power of 2.
   constexpr uint8_t packed_dim_shift = __builtin_ctz(packed_dim);
+  constexpr int bucket_score_offset = 128 * (1 << nbits);
   for (int cell_idx = 0; cell_idx < ncells; ++cell_idx) {
     const int begin = begins_ptr[cell_idx];
     const int n = sizes_ptr[cell_idx];
-    const float centroid_score = centroids_ptr[cell_idx];
 
-    // NOTE we could also just do a single multiplication independent of nprobe.
-    const auto bucket_scores = torch::matmul(
-        Q[cell_idx / nprobe].unsqueeze(1), bucket_weights.unsqueeze(0));
-    const float *bucket_scores_ptr = bucket_scores.data_ptr<float>();
+    const float centroid_score = centroids_ptr[cell_idx];
+    const float *bucket_scores_ptr = vt_bucket_scores_ptr + (
+      (cell_idx / nprobe) * bucket_score_offset
+    );
 
     const auto view = views[cell_idx];
     int32_t pos = -1, prev_pid = -1; float prev_score = 0;
