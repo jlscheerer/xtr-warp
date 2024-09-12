@@ -48,20 +48,14 @@ float inline __attribute__((always_inline)) decompression_kernel(
 
             score += score_0 + score_1 + score_2 + score_3;
         } else if constexpr (nbits == 4) {
-            const uint8_t unpacked_0 = (packed_val & 0xF0) >> 4;
-            const uint8_t unpacked_1 = (packed_val & 0x0F);
+            const uint8_t unpacked_0 = packed_val >> 4;
+            const uint8_t unpacked_1 = packed_val & 0x0F;
 
-            // NOTE These correspond to an index into the "dimension"
             const int unpacked_idx_0 = packed_idx << 1;
-            const int unpacked_idx_1 = unpacked_idx_0 + 1;
+            const int base_idx = unpacked_idx_0 << bucket_dim_shift;
 
-            // NOTE Constrcut the index into the "per dimension" lookup tables
-            const int idx_0 = (unpacked_idx_0 << bucket_dim_shift) | unpacked_0;
-            const int idx_1 = (unpacked_idx_1 << bucket_dim_shift) | unpacked_1;
-
-            const float score_0 = bucket_scores[idx_0];
-            const float score_1 = bucket_scores[idx_1];
-            score += score_0 + score_1;
+            score += bucket_scores[base_idx | unpacked_0] +
+                     bucket_scores[(base_idx | unpacked_1) | (1 << bucket_dim_shift)];
         }
     }
     return score;
@@ -120,7 +114,6 @@ torch_annotated_stride_view<> decompress_centroids_dedup(
       const uint8_t *residual = residuals_ptr + (
         static_cast<int64_t>(begin + inner_idx) << packed_dim_shift
       );
-
       const float score = centroid_score + decompression_kernel<nbits>(
         residual, bucket_scores_ptr
       );
