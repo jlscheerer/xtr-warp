@@ -57,14 +57,14 @@ void merge_candidate_strides(const annotated_stride_view<> stride1,
     if (i1 < c1_size) {
         for (; i1 < c1_size; ++i1) {
             result.keys_[result_size] = stride1.keys_[i1];
-            result.data_[result_size] = stride1.data_[i1];
+            result.data_[result_size] = combiner.lhs(stride1.data_[i1]);
             ++result_size;
         }
     }
     if (i2 < c2_size) {
         for (; i2 < c2_size; ++i2) {
             result.keys_[result_size] = stride2.keys_[i2];
-            result.data_[result_size] = stride2.data_[i2];
+            result.data_[result_size] = combiner.rhs(stride2.data_[i2]);
             ++result_size;
         }
     }
