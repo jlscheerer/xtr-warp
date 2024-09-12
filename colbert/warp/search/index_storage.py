@@ -177,19 +177,19 @@ class IndexScorerWARP(IndexLoaderWARP):
         ]
 
         print_message(
-            f"Loading precompute_topk_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+            f"Loading warp_select_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
-        cls.precompute_topk_centroids_cpp = load(
-            name="precompute_topk_centroids_cpp",
+        cls.warp_select_centroids_cpp = load(
+            name="warp_select_centroids_cpp",
             sources=[
                 os.path.join(
                     pathlib.Path(__file__).parent.resolve(),
-                    "precompute_topk_centroids.cpp",
+                    "warp_select_centroids.cpp",
                 ),
             ],
             extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
-        ).precompute_topk_centroids_cpp
+        ).warp_select_centroids_cpp
 
         print_message(
             f"Loading decompress_centroids_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
@@ -235,14 +235,12 @@ class IndexScorerWARP(IndexLoaderWARP):
             centroid_scores = Q.squeeze(0) @ self.centroids.T
             tracker.end("Candidate Generation")
 
+            tracker.begin("top-k Precompute")
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
-            (
-                cells,
-                centroid_scores,
-                mse_estimates,
-            ) = self._precompute_topk_centroids_native(
-                Q_mask, centroid_scores, nprobe, t_prime, tracker
+            cells, centroid_scores, mse_estimates = self._warp_select_centroids(
+                Q_mask, centroid_scores, nprobe, t_prime
             )
+            tracker.end("top-k Precompute")
 
             tracker.begin("Decompression")
             (
@@ -270,25 +268,19 @@ class IndexScorerWARP(IndexLoaderWARP):
 
             return pids, scores
 
-    def _precompute_topk_centroids_native(
-        self, Q_mask, centroid_scores, nprobe, t_prime, tracker
-    ):
-        tracker.begin("top-k Precompute")
-        cells, centroid_scores, mse = IndexScorerWARP.precompute_topk_centroids_cpp(
+    def _warp_select_centroids(self, Q_mask, centroid_scores, nprobe, t_prime):
+        cells, scores, mse = IndexScorerWARP.warp_select_centroids_cpp(
             Q_mask, centroid_scores, self.sizes_compacted, nprobe, t_prime, self.bound
         )
 
         cells = cells.flatten().contiguous()
-        centroid_scores = centroid_scores.flatten().contiguous()
+        scores = scores.flatten().contiguous()
 
-        # NOTE This SIGNIFICANTLY IMPROVES performance, because we don't unnecessarily do decompression
-        # We just decompress the dummy centroid here! ~60it/s vs 35it/s, without loss of performance.
-        # TODO(jlscheerer) Fix this and use a "skip_mask". This requires correct handling of strides with
-        #                  a length of zero.
-        cells[centroid_scores == 0] = self.kdummy_centroid
-        tracker.end("top-k Precompute")
+        # NOTE Skip decompression of cells with a zero score centroid.
+        # This means that the corresponding query tokens was 0. 
+        cells[scores == 0] = self.kdummy_centroid
 
-        return cells, centroid_scores, mse
+        return cells, scores, mse
 
     def _decompress_centroid_embeds_native_strided_repacked(
         self, Q, centroid_ids, centroid_scores, nprobe
