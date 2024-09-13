@@ -80,8 +80,9 @@ private:
       std::unique_lock<std::mutex> guard(queue_mutex_);
       queue_cv_.wait(guard,
                      [this] { return !queue_.empty() || should_terminate_; });
-      if (should_terminate_)
+      if (should_terminate_) {
         return std::nullopt;
+      }
       task_id = queue_.front();
       queue_.pop();
     }
@@ -102,6 +103,7 @@ private:
         const task_ref successor = task.successor_;
         if (successor == -1) {
           notify_tasks_complete();
+          return;
         }
         if (tasks_[successor].pending_.fetch_sub(1) == 1) {
           task_id_opt = successor;
