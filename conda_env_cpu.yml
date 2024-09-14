@@ -1,4 +1,4 @@
-name: colbert
+name: warp
 channels:
   - pytorch
   - conda-forge
