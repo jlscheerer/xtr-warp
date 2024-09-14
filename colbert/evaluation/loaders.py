@@ -8,7 +8,6 @@ from collections import defaultdict, OrderedDict
 from colbert.parameters import DEVICE
 from colbert.modeling.colbert import ColBERT
 from colbert.utils.utils import print_message, load_checkpoint
-from colbert.evaluation.load_model import load_model
 from colbert.utils.runs import Run
 
 
@@ -175,25 +174,3 @@ def load_collection(collection_path):
     print()
 
     return collection
-
-
-def load_colbert(args, do_print=True):
-    colbert, checkpoint = load_model(args, do_print)
-
-    # TODO: If the parameters below were not specified on the command line, their *checkpoint* values should be used.
-    # I.e., not their purely (i.e., training) default values.
-
-    for k in ['query_maxlen', 'doc_maxlen', 'dim', 'similarity', 'amp']:
-        if 'arguments' in checkpoint and hasattr(args, k):
-            if k in checkpoint['arguments'] and checkpoint['arguments'][k] != getattr(args, k):
-                a, b = checkpoint['arguments'][k], getattr(args, k)
-                Run.warn(f"Got checkpoint['arguments']['{k}'] != args.{k} (i.e., {a} != {b})")
-
-    if 'arguments' in checkpoint:
-        if args.rank < 1:
-            print(ujson.dumps(checkpoint['arguments'], indent=4))
-
-    if do_print:
-        print('\n')
-
-    return colbert, checkpoint
