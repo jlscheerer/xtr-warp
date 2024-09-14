@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from colbert.warp.utils.index_converter import convert_index
-from colbert.warp.utils.collection_indexer import index
-from colbert.warp.config import WARPRunConfig
+from warp.engine.utils.index_converter import convert_index
+from warp.engine.utils.collection_indexer import index
+from warp.engine.config import WARPRunConfig
 
 
 def parse_warp_run_config(collection, dataset, type_, split, nbits):

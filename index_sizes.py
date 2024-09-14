@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from colbert.warp.config import WARPRunConfig
+from warp.engine.config import WARPRunConfig
 
 DATASETS = ["beir.nfcorpus", "beir.scifact", "beir.scidocs",
             "beir.fiqa", "beir.webis-touche2020", "beir.quora",
