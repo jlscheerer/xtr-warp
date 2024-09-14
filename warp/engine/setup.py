@@ -2,6 +2,8 @@
 import os
 from dotenv import load_dotenv
 
+print("#> Running WARP Setup Code.")
+
 # Ensure we are running use CPU only!
 os.environ["CUDA_VISBLE_DEVICES"] = ""
 
@@ -13,5 +15,3 @@ EXPERIMENT_ROOT = os.environ["EXPERIMENT_ROOT"]
 
 BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
 LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
-
-print("#> Running WARP Setup Code.")

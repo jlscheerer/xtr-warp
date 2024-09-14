@@ -9,9 +9,9 @@ from warp.modeling.xtr import XTRCheckpoint, build_xtr_model
 from warp.engine.config import USE_CORE_ML
 
 if USE_CORE_ML:
-    from warp.engine.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
-from warp.engine.onnx_model import XTROnnxConfig, XTROnnxModel
-from warp.engine.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
+    from warp.engine.inference.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
+from warp.engine.inference.onnx_model import XTROnnxConfig, XTROnnxModel
+from warp.engine.inference.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
 
 
 class Checkpoint(ColBERT):

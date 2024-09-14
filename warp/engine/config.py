@@ -7,10 +7,10 @@ from warp.infra import ColBERTConfig
 
 USE_CORE_ML = False
 
-from warp.engine.onnx_model import XTROnnxConfig
+from warp.engine.inference.onnx_model import XTROnnxConfig
 
 if USE_CORE_ML:
-    from warp.engine.coreml_model import XTRCoreMLConfig
+    from warp.engine.inference.coreml_model import XTRCoreMLConfig
     OptimConfig = Union[XTROnnxConfig, XTRCoreMLConfig]
 else:
     OptimConfig = XTROnnxConfig
