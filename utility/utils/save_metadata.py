@@ -1,4 +1,4 @@
-from colbert.utils.utils import dotdict
+from warp.utils.utils import dotdict
 import os
 import sys
 import git
