@@ -17,17 +17,17 @@ else:
 
 @dataclass
 class WARPRunConfig:
-    nranks: int
     nbits: int
     
-    dataset: Literal["beir", "lotte"]
-    collection: str
+    collection: Literal["beir", "lotte"]
+    dataset: str
     datasplit: Literal["train", "dev", "test"]
     type_: Optional[Literal["search", "forum"]] = None
 
     k: int = 100
     nprobe: int = 16
     t_prime: Optional[int] = None
+    nranks: int = 1
 
     optim: Optional[OptimConfig] = None
 
@@ -38,26 +38,26 @@ class WARPRunConfig:
 
     @property
     def index_name(self):
-        return f"{self.dataset}-{self.collection}.split={self.datasplit}.nbits={self.nbits}"
+        return f"{self.collection}-{self.dataset}.split={self.datasplit}.nbits={self.nbits}"
 
     @property
     def collection_path(self):
         BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
         LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
-        if self.dataset == "beir":
-            return f"{BEIR_COLLECTION_PATH}/{self.collection}/collection.tsv"
-        elif self.dataset == "lotte":
-            return f"{LOTTE_COLLECTION_PATH}/{self.collection}/{self.datasplit}/collection.tsv"
+        if self.collection == "beir":
+            return f"{BEIR_COLLECTION_PATH}/{self.dataset}/collection.tsv"
+        elif self.collection == "lotte":
+            return f"{LOTTE_COLLECTION_PATH}/{self.dataset}/{self.datasplit}/collection.tsv"
         raise AssertionError
 
     @property
     def queries_path(self):
         BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
         LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
-        if self.dataset == "beir":
-            return f"{BEIR_COLLECTION_PATH}/{self.collection}/questions.{self.datasplit}.tsv"
-        elif self.dataset == "lotte":
-            return f"{LOTTE_COLLECTION_PATH}/{self.collection}/{self.datasplit}/questions.{self.type_}.tsv"
+        if self.collection == "beir":
+            return f"{BEIR_COLLECTION_PATH}/{self.dataset}/questions.{self.datasplit}.tsv"
+        elif self.collection == "lotte":
+            return f"{LOTTE_COLLECTION_PATH}/{self.dataset}/{self.datasplit}/questions.{self.type_}.tsv"
         raise AssertionError
 
     @property
@@ -67,7 +67,7 @@ class WARPRunConfig:
 
     @property
     def experiment_name(self):
-        return f"{self.dataset}-{self.collection}"
+        return f"{self.collection}-{self.dataset}"
 
     def colbert(self):
         return ColBERTConfig(

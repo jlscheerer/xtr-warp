@@ -28,14 +28,14 @@ def _load_qas_lotte(qas_path):
 class WARPQRels:
     def __init__(self, config):
         self.config = config
-        if self.config.dataset == "beir":
+        if self.config.collection == "beir":
             BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
-            dataset_path = os.path.join(BEIR_COLLECTION_PATH, self.config.collection)
+            dataset_path = os.path.join(BEIR_COLLECTION_PATH, self.config.dataset)
             corpus, queries, qrels = GenericDataLoader(dataset_path).load(split=self.config.datasplit)
             self.qrels = qrels
-        elif self.config.dataset == "lotte":
+        elif self.config.collection == "lotte":
             LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
-            dataset_path = os.path.join(LOTTE_COLLECTION_PATH, self.config.collection, self.config.datasplit)
+            dataset_path = os.path.join(LOTTE_COLLECTION_PATH, self.config.dataset, self.config.datasplit)
             qas_path = os.path.join(dataset_path, f"qas.{self.config.type_}.jsonl")
             self.qas = _load_qas_lotte(qas_path)
 

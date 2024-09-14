@@ -91,10 +91,10 @@ class WARPRanking:
         self.ranking = ranking
 
     def evaluate(self, qrels: WARPQRels, k: int):
-        if qrels.config.dataset == "lotte":
+        if qrels.config.collection == "lotte":
             return eval_metrics_lotte(qrels.qas, self, k=5)
         else:
-            assert qrels.config.dataset == "beir"
+            assert qrels.config.collection == "beir"
             return eval_metrics_beir(qrels, self)
 
 

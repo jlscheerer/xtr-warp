@@ -11,15 +11,13 @@ from colbert.warp.config import WARPRunConfig
 
 def parse_warp_run_config(collection, dataset, type_, split, nbits):
     if collection not in ["lotte", "beir"] or dataset is None or split is None or nbits is None:
-        print(collection, dataset, split, nbits)
         return None
     if collection == "lotte" and type_ is None:
         return None
-    # TODO(jlscheerer) Rename the parameters to be consistent with the arguments.
     return WARPRunConfig(
         nranks=4,
-        dataset=collection,
-        collection=dataset,
+        collection=collection,
+        dataset=dataset,
         type_=type_,
         datasplit=split,
         nbits=nbits,

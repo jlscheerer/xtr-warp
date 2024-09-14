@@ -44,11 +44,10 @@ def bytes_to_gib(size):
 for nbits in NBITS_VALUES:
     for collection_dataset in DATASETS:
         collection, dataset = collection_dataset.split(".")
-        # TODO(jlscheerer) Introduce consistent naming for collection/dataset
         config = WARPRunConfig(
             nranks=4,
-            dataset=collection,
-            collection=dataset,
+            collection=collection,
+            dataset=dataset,
             type_="search" if collection == "lotte" else None,
             datasplit="test",
             nbits=nbits,

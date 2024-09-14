@@ -67,12 +67,11 @@ def execute_config(config):
     collection, dataset, split, nbits = config["collection"], config["dataset"], config["split"], config["nbits"]
     nprobe, t_prime, bound = config["nprobe"], config["t_prime"], config["bound"]
 
-    # Configure WARP to use specified dataset & the unquantized model
     optim = None
     warp_config = WARPRunConfig(
         nranks=4,
-        dataset=collection,
-        collection=dataset,
+        collection=collection,
+        dataset=dataset,
         datasplit=split,
         type_="search" if collection == "lotte" else None,
         nbits=nbits,
@@ -100,7 +99,7 @@ def execute_config(config):
 
     statistics = {
         "centroids": searcher.searcher.ranker.centroids.shape[0],
-        "embeddings": searcher.searcher.ranker.residuals_repacked_compacted_df.shape[0],
+        "embeddings": searcher.searcher.ranker.residuals_compacted.shape[0],
         "median_size": searcher.searcher.ranker.sizes_compacted.median().item()
     }
 
