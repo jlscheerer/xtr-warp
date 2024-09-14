@@ -6,9 +6,10 @@ torch.set_num_threads(1)
 
 import warp.engine.setup
 
+from warp.data.queries import WARPQueries
+
 from warp.engine.config import WARPRunConfig
 from warp.engine.searcher import WARPSearcher
-from warp.engine.data.queries import WARPQueries
 
 import argparse
 import psutil

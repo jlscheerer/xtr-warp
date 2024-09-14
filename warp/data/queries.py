@@ -1,12 +1,16 @@
 from warp.infra.run import Run
+from collections import OrderedDict
 import os
+import jsonlines
 import ujson
 
+from beir.datasets.data_loader import GenericDataLoader
 from warp.evaluation.loaders import load_queries
 
-# TODO: Look up path in some global [per-thread or thread-safe] list.
-# TODO: path could be a list of paths...? But then how can we tell it's not a list of queries..
+from warp.infra import Run, RunConfig
+from warp.infra.provenance import Provenance
 
+from warp.engine.config import WARPRunConfig
 
 class Queries:
     def __init__(self, path=None, data=None):
@@ -121,43 +125,62 @@ class Queries:
         assert False, f"obj has type {type(obj)} which is not compatible with cast()"
 
 
-# class QuerySet:
-#     def __init__(self, *paths, renumber=False):
-#         self.paths = paths
-#         self.original_queries = [load_queries(path) for path in paths]
+class WARPQas:
+    def __init__(self, num_total_qids, data):
+        super().__init__()
+        self.num_total_qids = num_total_qids
+        self.data = data
 
-#         if renumber:
-#             self.queries = flatten([q.values() for q in self.original_queries])
-#             self.queries = {idx: text for idx, text in enumerate(self.queries)}
+def _load_qas_lotte(qas_path):
+    qas = OrderedDict()
+    num_total_qids = 0
+    with jsonlines.open(qas_path, mode="r") as f:
+        for line in f:
+            qid = int(line["qid"])
+            num_total_qids += 1
+            answer_pids = set(line["answer_pids"])
+            qas[qid] = answer_pids
+    return WARPQas(num_total_qids=num_total_qids, data=dict(qas))
 
-#         else:
-#             self.queries = {}
+class WARPQRels:
+    def __init__(self, config):
+        self.config = config
+        if self.config.collection == "beir":
+            BEIR_COLLECTION_PATH = os.environ["BEIR_COLLECTION_PATH"]
+            dataset_path = os.path.join(BEIR_COLLECTION_PATH, self.config.dataset)
+            corpus, queries, qrels = GenericDataLoader(dataset_path).load(split=self.config.datasplit)
+            self.qrels = qrels
+        elif self.config.collection == "lotte":
+            LOTTE_COLLECTION_PATH = os.environ["LOTTE_COLLECTION_PATH"]
+            dataset_path = os.path.join(LOTTE_COLLECTION_PATH, self.config.dataset, self.config.datasplit)
+            qas_path = os.path.join(dataset_path, f"qas.{self.config.type_}.jsonl")
+            self.qas = _load_qas_lotte(qas_path)
 
-#             for queries in self.original_queries:
-#                 assert len(set.intersection(set(queries.keys()), set(self.queries.keys()))) == 0, \
-#                     "renumber=False requires non-overlapping query IDs"
+class WARPQueries:
+    def __init__(self, config: WARPRunConfig):
+        self.config = config
+        with Run().context(
+            RunConfig(nranks=config.nranks, experiment=config.experiment_name)
+        ):
+            self.queries = Queries(config.queries_path)
 
-#                 self.queries.update(queries)
+    def provenance(self, source, k):
+        provenance = Provenance()
+        provenance.source = source
+        provenance.queries = self.queries.provenance()
+        provenance.config = self.config.colbert().export()
+        provenance.k = k
+        return provenance
 
-#         assert len(self.queries) == sum(map(len, self.original_queries))
+    def __len__(self):
+        return self.queries.__len__()
 
-#     def todict(self):
-#         return dict(self.queries)
+    def __iter__(self):
+        return self.queries.__iter__()
 
-#     def tolist(self):
-#         return list(self.queries.values())
+    def __getitem__(self, key):
+        return self.queries.__getitem__(key)
 
-#     def query_sets(self):
-#         return self.original_queries
-
-#     def split_rankings(self, rankings):
-#         assert type(rankings) is list
-#         assert len(rankings) == len(self.queries)
-
-#         sub_rankings = []
-#         offset = 0
-#         for source in self.original_queries:
-#             sub_rankings.append(rankings[offset:offset+len(source)])
-#             offset += len(source)
-
-#         return sub_rankings
+    @property
+    def qrels(self):
+        return WARPQRels(self.config)
