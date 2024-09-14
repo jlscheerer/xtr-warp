@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 import torch
 
 from warp.modeling.xtr import XTRTokenizer
-from warp.engine.inference.onnx_model import XTROnnxModel, XTROnnxConfig, XTROnnxQuantization
+from warp.engine.runtime.onnx_model import XTROnnxModel, XTROnnxConfig, XTROnnxQuantization
 
 @dataclass
 class XTROpenVinoConfig:

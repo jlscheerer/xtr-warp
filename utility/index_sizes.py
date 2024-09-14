@@ -41,30 +41,9 @@ def plaid_index_size(index_path):
 def bytes_to_gib(size):
     return size / (1024 * 1024 * 1024)
 
-for nbits in NBITS_VALUES:
-    for collection_dataset in DATASETS:
-        collection, dataset = collection_dataset.split(".")
-        config = WARPRunConfig(
-            nranks=4,
-            collection=collection,
-            dataset=dataset,
-            type_="search" if collection == "lotte" else None,
-            datasplit="test",
-            nbits=nbits,
-            k=100,
-            optim=None
-        )
-        index_path = config.colbert().index_path
-
-        try:
-            warp_size = bytes_to_gib(warp_index_size(index_path))
-        except:
-            warp_size = "-"
-
-        try:
-            plaid_size = bytes_to_gib(plaid_index_size(index_path))
-        except:
-            plaid_size = "-"
-
-        print(f"nbits={nbits}", collection_dataset, "XTR/WARP", warp_size, "GiB")
-        print(f"nbits={nbits}", collection_dataset, "ColBERTv2/PLAID", plaid_size, "GiB")
+def safe_index_size(config: WARPRunConfig):
+    index_path = config.colbert().index_path
+    try:
+        return warp_index_size(index_path)
+    except:
+        return None

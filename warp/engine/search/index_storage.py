@@ -111,10 +111,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         self.nbits = config.nbits
 
         print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
-
-        # NOTE To be more efficient, we could also derive this from the dataset.
-        #      For now we just set it to a sufficiently high constant value.
-        self.bound = 128
+        self.bound = config.bound
 
     @classmethod
     def try_load_torch_extensions(cls, use_gpu):

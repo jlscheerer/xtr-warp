@@ -9,9 +9,9 @@ from warp.modeling.xtr import XTRCheckpoint, build_xtr_model
 from warp.engine.config import USE_CORE_ML
 
 if USE_CORE_ML:
-    from warp.engine.inference.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
-from warp.engine.inference.onnx_model import XTROnnxConfig, XTROnnxModel
-from warp.engine.inference.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
+    from warp.engine.runtime.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
+from warp.engine.runtime.onnx_model import XTROnnxConfig, XTROnnxModel
+from warp.engine.runtime.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
 
 
 class Checkpoint(ColBERT):
@@ -23,24 +23,24 @@ class Checkpoint(ColBERT):
 
     def __new__(cls, name, colbert_config=None, verbose: int = 3, warp_config=None):
         if name == "google/xtr-base-en":
-            if warp_config is None or warp_config.optim is None:
+            if warp_config is None or warp_config.runtime is None:
                 xtr = build_xtr_model()
                 config = colbert_config
                 if warp_config is not None:
                     config = warp_config.colbert()
                 return XTRCheckpoint(xtr, config)
 
-            if isinstance(warp_config.optim, XTROnnxConfig):
-                model = XTROnnxModel(warp_config.optim)
+            if isinstance(warp_config.runtime, XTROnnxConfig):
+                model = XTROnnxModel(warp_config.runtime)
                 return XTRCheckpoint(model, warp_config.colbert())
 
-            if isinstance(warp_config.optim, XTROpenVinoConfig):
-                model = XTROpenVinoModel(warp_config.optim)
+            if isinstance(warp_config.runtime, XTROpenVinoConfig):
+                model = XTROpenVinoModel(warp_config.runtime)
                 return XTRCheckpoint(model, warp_config.colbert())
 
             if USE_CORE_ML:
-                if isinstance(warp_config.optim, XTRCoreMLConfig):
-                    model = XTRCoreMLModel(warp_config.optim)
+                if isinstance(warp_config.runtime, XTRCoreMLConfig):
+                    model = XTRCoreMLModel(warp_config.runtime)
                     return XTRCheckpoint(model, warp_config.colbert())
 
             # We should never reach this point!

@@ -7,13 +7,13 @@ from warp.infra import ColBERTConfig
 
 USE_CORE_ML = False
 
-from warp.engine.inference.onnx_model import XTROnnxConfig
+from warp.engine.runtime.onnx_model import XTROnnxConfig
 
 if USE_CORE_ML:
-    from warp.engine.inference.coreml_model import XTRCoreMLConfig
-    OptimConfig = Union[XTROnnxConfig, XTRCoreMLConfig]
+    from warp.engine.runtime.coreml_model import XTRCoreMLConfig
+    RuntimeConfig = Union[XTROnnxConfig, XTRCoreMLConfig]
 else:
-    OptimConfig = XTROnnxConfig
+    RuntimeConfig = XTROnnxConfig
 
 @dataclass
 class WARPRunConfig:
@@ -27,9 +27,15 @@ class WARPRunConfig:
     k: int = 100
     nprobe: int = 16
     t_prime: Optional[int] = None
+
+    # NOTE To be more efficient, we could also derive this from the dataset.
+    #      For now we just set it to a sufficiently high constant value.
+    bound: int = 128
+    
     nranks: int = 1
 
-    optim: Optional[OptimConfig] = None
+    # runtime == None uses "default" PyTorch for inference.
+    runtime: Optional[RuntimeConfig] = None
 
     @property
     def index_root(self):
