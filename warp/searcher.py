@@ -73,7 +73,7 @@ class Searcher:
         self.warp_engine = warp_engine
         if warp_engine:
             self.ranker = IndexScorerWARP(
-                self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime
+                self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound
             )
         else:
             self.ranker = IndexScorer(self.index, use_gpu, load_index_with_mmap)

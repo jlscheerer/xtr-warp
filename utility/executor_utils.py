@@ -3,6 +3,7 @@ import json
 import os
 import io
 import sys
+import copy
 import subprocess
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -12,7 +13,7 @@ from contextlib import redirect_stdout
 BEIR_DATASETS = ["nfcorpus", "scifact", "scidocs", "fiqa", "webis-touche2020", "quora"]
 LOTTE_DATASETS = ["lifestyle", "writing", "recreation", "technology", "science", "pooled"]
 
-def _make_config(collection, dataset, nbits, nprobe, t_prime, runtime=None, split="test", bound=None):
+def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=None, runtime=None, split="test", bound=None):
     assert collection in ["beir", "lotte"]
     if collection == "beir":
         assert dataset in BEIR_DATASETS
@@ -21,6 +22,7 @@ def _make_config(collection, dataset, nbits, nprobe, t_prime, runtime=None, spli
     assert nbits in [2, 4]
     assert nprobe is None or isinstance(nprobe, int)
     assert t_prime is None or isinstance(t_prime, int)
+    assert document_top_k is None or isinstance(document_top_k, int)
     assert split in ["dev", "test"]
     assert bound is None or isinstance(bound, int)
     return {
@@ -29,12 +31,13 @@ def _make_config(collection, dataset, nbits, nprobe, t_prime, runtime=None, spli
         "nbits": nbits,
         "nprobe": nprobe,
         "t_prime": t_prime,
+        "document_top_k": document_top_k,
         "runtime": runtime,
         "split": split,
         "bound": bound,
     }
 
-def _expand_configs(datasets, nbits, nprobes, t_primes, runtimes=None, split="test", bound=None):
+def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, runtimes=None, split="test", bound=None):
     if not isinstance(nbits, list):
         nbits = [nbits]
     if not isinstance(datasets, list):
@@ -43,6 +46,8 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, runtimes=None, split="te
         nprobes = [nprobes]
     if not isinstance(t_primes, list):
         t_primes = [t_primes]
+    if not isinstance(document_top_ks, list):
+        document_top_ks = [document_top_ks]
     if not isinstance(runtimes, list):
         runtimes = [runtimes]
     configs = []
@@ -51,9 +56,10 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, runtimes=None, split="te
         for nbit in nbits:
             for nprobe in nprobes:
                 for t_prime in t_primes:
-                    for runtime in runtimes:
-                        configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe,
-                                                    t_prime=t_prime, runtime=runtime, split=split, bound=bound))
+                    for document_top_k in document_top_ks:
+                        for runtime in runtimes:
+                            configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe, t_prime=t_prime,
+                                                        document_top_k=document_top_k, runtime=runtime, split=split, bound=bound))
     return configs
 
 def _get(config, key):
@@ -65,8 +71,8 @@ def _expand_configs_file(configuration_file):
     configs = configuration_file["configurations"]
     return _expand_configs(datasets=_get(configs, "datasets"), nbits=_get(configs, "nbits"),
                            nprobes=_get(configs, "nprobe"),t_primes=_get(configs, "t_prime"),
-                           runtimes=_get(configs, "runtime"), split=_get(configs, "datasplit"),
-                           bound=_get(configs, "bound"))
+                           document_top_ks=_get(configs, "document_top_k"), runtimes=_get(configs, "runtime"),
+                           split=_get(configs, "datasplit"), bound=_get(configs, "bound"))
 
 def _write_results(results_file, data):
     with open(results_file, "w") as file:
@@ -91,6 +97,19 @@ def _init_proc(env_vars):
     for key, value in env_vars.items():
         os.environ[key] = value
 
+def _prepare_result(result):
+    if "_update" not in result:
+        return result
+    # NOTE Used to update parameters determined at runtime.
+    result = copy.deepcopy(result)
+    update = result["_update"]
+    for key, value in update.items():
+        current = result["provenance"][key]
+        assert current is None or current == value
+        result["provenance"][key] = value
+    del result["_update"]
+    return result
+
 def _execute_configs_parallel(configs, callback, type_, params, results_file, max_workers):
     env_vars = dict(os.environ)
     progress = tqdm(total=len(configs))
@@ -108,7 +127,7 @@ def _execute_configs_parallel(configs, callback, type_, params, results_file, ma
             result["provenance"] = config
             result["provenance"]["type"] = type_
             result["provenance"]["parameters"] = params
-            results.append(result)
+            results.append(_prepare_result(result))
             _write_results(results_file=results_file, data=results)
             
             sys.stdout = sys.__stdout__
@@ -123,7 +142,7 @@ def _execute_configs_sequential(configs, callback, type_, params, results_file):
         result["provenance"] = config
         result["provenance"]["type"] = type_
         result["provenance"]["parameters"] = params
-        results.append(result)
+        results.append(_prepare_result(result))
         _write_results(results_file=results_file, data=results)
 
 def execute_configs(exec_info, configs, results_file, type_, params, max_workers):

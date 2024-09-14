@@ -82,7 +82,8 @@ class IndexScorerWARP(IndexLoaderWARP):
         config: ColBERTConfig,
         use_gpu=False,
         load_index_with_mmap=False,
-        t_prime=None
+        t_prime=None,
+        bound=128,
     ):
         assert not use_gpu
         assert not load_index_with_mmap
@@ -111,7 +112,7 @@ class IndexScorerWARP(IndexLoaderWARP):
         self.nbits = config.nbits
 
         print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
-        self.bound = config.bound
+        self.bound = bound
 
     @classmethod
     def try_load_torch_extensions(cls, use_gpu):

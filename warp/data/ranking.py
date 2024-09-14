@@ -139,9 +139,7 @@ def eval_metrics_lotte(qas, rankings, k):
     for k in K_VALUES:
         final_metrics[f"success@{k}"] = _success_at_k_lotte(expected=qas, rankings=rankings.ranking, k=k)
         final_metrics[f"recall@{k}"] = _recall_at_k_lotte(expected=qas, rankings=rankings.ranking, k=k)
-    return {
-        "metrics": final_metrics
-    }
+    return final_metrics
 
 def eval_metrics_beir(qrels, rankings):
     K_VALUES = [5, 10, 50, 100]

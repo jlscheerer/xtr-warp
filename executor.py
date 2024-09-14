@@ -19,7 +19,12 @@ def latency(config, params):
     return {}
 
 def metrics(config, params):
-    return {}
+    run = spawn_and_execute("utility/latency_runner.py", config, params)
+    return {
+        "metrics": run["metrics"],
+        "statistics": run["statistics"],
+        "_update": run["_update"]
+    }
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='XTR/WARP Experiment [Executor/Platform]')
