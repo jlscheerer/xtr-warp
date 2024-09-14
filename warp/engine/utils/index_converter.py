@@ -73,12 +73,9 @@ def convert_index(index_path, destination_path=None):
         bucket_weights.float().numpy(force=True),
     )
 
-    print("[INFO] centroids.dtype=", centroids.dtype)
+    print("#> centroids.dtype =", centroids.dtype)
 
     centroids = centroids.float()
-    # TODO(jlscheerer) Path the centroids again.
-    # NOTE ...but for now we use the centroids.pt file anyways
-    # assert centroids.dtype == torch.float
     np.save(
         os.path.join(destination_path, "centroids.npy"),
         centroids.numpy(force=True).astype(np.float32),
@@ -87,9 +84,6 @@ def convert_index(index_path, destination_path=None):
     ivf, ivf_lengths = torch.load(os.path.join(index_path, "ivf.pid.pt"))
     assert ivf_lengths.shape == (num_partitions,)
     assert ivf.shape == (ivf_lengths.sum(),)
-
-    # np.save(os.path.join(destination_path, "ivf.npy"), ivf.numpy())
-    # np.save(os.path.join(destination_path, "ivf.size.npy"), ivf_lengths.numpy())
 
     print("> Loading centroid information")
     centroid_sizes = torch.zeros((num_partitions,), dtype=torch.int64)
@@ -187,8 +181,7 @@ def convert_index(index_path, destination_path=None):
     residuals_repacked_compacted_d = decompression_lookup_table[
         residuals_repacked_compacted.long()
     ]
-    # TODO(jlscheerer) We could generalize this to (arbitrary) powers of two.
-    # But there are presumably not too many variants anyway...
+    # NOTE This could easily be generalized to arbitrary powers of two.
     if nbits == 4:
         residuals_repacked_compacted_df = (
             2**4 * residuals_repacked_compacted_d[:, :, 0]
