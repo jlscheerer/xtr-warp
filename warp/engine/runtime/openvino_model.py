@@ -14,13 +14,14 @@ class XTROpenVinoConfig:
     opset_version: int = 16
     quantization: XTROnnxQuantization = XTROnnxQuantization.NONE
 
+    num_threads: int = 1
+
     @property
     def onnx(self):
         return XTROnnxConfig(batch_size=self.batch_size, opset_version=self.opset_version,
-                             quantization=self.quantization)
+                             quantization=self.quantization, num_threads=self.num_threads)
 
 
-# TODO(jlscheerer) Support quantization here.
 class XTROpenVinoModel:
     def __init__(self, config: XTROpenVinoConfig):
         assert config.batch_size == 1
@@ -37,7 +38,10 @@ class XTROpenVinoModel:
         model_path = os.path.join(ONNX_MODEL_DIR, config.onnx.filename)
 
         model = core.read_model(model_path)
-        ov_config = {"NUM_STREAMS": "1", "INFERENCE_NUM_THREADS": 1}
+        ov_config = {
+            "NUM_STREAMS": 1,
+            "INFERENCE_NUM_THREADS": config.num_threads,
+        }
         compiled_model = core.compile_model(model, "CPU", ov_config)
         self.infer_request = compiled_model.create_infer_request()
 

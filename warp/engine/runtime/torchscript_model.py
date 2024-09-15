@@ -9,6 +9,7 @@ from warp.modeling.xtr import QUERY_MAXLEN, build_xtr_model, XTRTokenizer
 @dataclass
 class XTRTorchScriptConfig:
     batch_size: int = 1
+    num_threads: int = 1
 
     @property
     def filename(self):
@@ -26,6 +27,8 @@ class XTRTorchScriptModel:
         self.tokenizer = XTRTokenizer(
             AutoTokenizer.from_pretrained("google/xtr-base-en")
         )
+
+        assert config.num_threads == torch.torch.get_num_threads()
 
     @staticmethod
     def _create_model_if_not_exists(root_dir, config: XTRTorchScriptConfig):

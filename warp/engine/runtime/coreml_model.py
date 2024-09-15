@@ -15,6 +15,9 @@ from warp.modeling.xtr import QUERY_MAXLEN, build_xtr_model, XTRTokenizer
 class XTRCoreMLConfig:
     batch_size: int = 1
 
+    # NOTE Currently, num_threads value is ignored. It is just keeped for consistency.
+    num_threads: int = 1
+
     @property
     def base_name(self):
         return "xtr"
