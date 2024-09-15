@@ -84,7 +84,7 @@ def _write_results(results_file, data):
     with open(results_file, "w") as file:
         file.write(json.dumps(data, indent=3))
 
-def load_configuration(filename, overwrite=False):
+def load_configuration(filename, info=False, overwrite=False):
     with open(filename, "r") as file:
         config_file = json.loads(file.read())
     name = config_file["name"]
@@ -92,11 +92,12 @@ def load_configuration(filename, overwrite=False):
     params = _get(config_file, "parameters") or {}
     configs = _expand_configs_file(config_file)
 
-    os.makedirs("experiments/results", exist_ok=True)
     results_file = os.path.join("experiments/results", f"{name}.json")
-    assert not os.path.exists(results_file) or overwrite
+    if not info:
+        os.makedirs("experiments/results", exist_ok=True)
+        assert not os.path.exists(results_file) or overwrite
 
-    _write_results(results_file, [])
+        _write_results(results_file, [])
     return results_file, type_, params, configs
 
 def _init_proc(env_vars):
@@ -183,3 +184,24 @@ def spawn_and_execute(script, config, params):
         print(process.stderr, file=sys.stderr)
     assert response[-1] == "#> Done"
     return json.loads(response[-2])
+
+def _strip_provenance(config, result):
+    del result["parameters"]
+    del result["type"]
+    if "document_top_k" not in config:
+        result["document_top_k"] = None
+    if "num_threads" not in config:
+        result["num_threads"] = 1
+    return result
+
+def check_execution(filename, configs, result_file):
+    with open(filename, "r") as file:
+        config_data = json.loads(file.read())
+    with open(result_file, "r") as file:
+        results = json.loads(file.read())
+    result_configs = [_strip_provenance(config_data["configurations"], result["provenance"]) for result in results]
+    missing = []
+    for config in configs:
+        if config not in result_configs:
+            missing.append(config)
+    print(len(missing), len(configs))

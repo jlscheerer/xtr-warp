@@ -9,7 +9,7 @@ from utility.executor_utils import read_subprocess_inputs, publish_subprocess_re
 if __name__ == "__main__":
     config, params = read_subprocess_inputs()
 
-    num_threads = params.get("num_threads", 1)
+    num_threads = config["num_threads"]
 
     proc = psutil.Process()
     if "cpu_affinity" in params:
