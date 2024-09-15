@@ -35,11 +35,12 @@ def _make_runtime(runtime, num_threads=1):
 
     assert False
 
-def make_run_config(config, num_threads=1):
+def make_run_config(config):
     collection, dataset, split = config["collection"], config["dataset"], config["split"]
     nbits, nprobe, t_prime, bound = config["nbits"], config["nprobe"], config["t_prime"], config["bound"]
     k = config["document_top_k"] or DEFAULT_K_VALUE
 
+    num_threads = config["num_threads"]
     return WARPRunConfig(
         collection=collection,
         dataset=dataset,

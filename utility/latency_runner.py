@@ -37,7 +37,7 @@ if __name__ == "__main__":
     from warp.data.queries import WARPQueries
     from warp.utils.tracker import ExecutionTracker
 
-    run_config = make_run_config(config, num_threads=num_threads)
+    run_config = make_run_config(config)
 
     searcher = WARPSearcher(run_config)
     queries = WARPQueries(run_config)
