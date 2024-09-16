@@ -6,7 +6,7 @@
 
 #include <ATen/Parallel.h>
 
-#include "annotated_stride_view.hpp"
+#include "../annotated_stride_view.hpp"
 
 constexpr int dim = 128;
 

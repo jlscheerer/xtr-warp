@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "task_graph.hpp"
-#include "annotated_stride_view.hpp"
+#include "../annotated_stride_view.hpp"
 
 constexpr int max_num_tokens = 32;
 

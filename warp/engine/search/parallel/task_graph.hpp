@@ -75,12 +75,17 @@ template <typename task_type> struct task_graph {
 
 private:
   std::optional<task_ref> dequeue_task() {
+    // NOTE A condition_variable is (likely) overkill here.
+    if (should_terminate_) return std::nullopt;
     task_ref task_id;
     {
       std::unique_lock<std::mutex> guard(queue_mutex_);
+      if (queue_.empty() || should_terminate_) return std::nullopt;
       queue_cv_.wait(guard,
                      [this] { return !queue_.empty() || should_terminate_; });
-      if (should_terminate_) {
+      // NOTE we can immediately kill a thread once the queue is empty as the number of tasks only ever decreases.
+      //      i.e., we will never add to the queue again. 
+      if (queue_.empty() || should_terminate_) {
         return std::nullopt;
       }
       task_id = queue_.front();

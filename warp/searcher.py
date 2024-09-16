@@ -10,6 +10,7 @@ from warp.modeling.checkpoint import Checkpoint
 from warp.search.index_storage import IndexScorer
 from warp.engine.config import WARPRunConfig
 from warp.engine.search.index_storage import IndexScorerWARP
+from warp.engine.search.parallel.parallel_index_storage import ParallelIndexScorerWARP
 
 from warp.infra.provenance import Provenance
 from warp.infra.run import Run
@@ -72,9 +73,14 @@ class Searcher:
 
         self.warp_engine = warp_engine
         if warp_engine:
-            self.ranker = IndexScorerWARP(
-                self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound
-            )
+            if torch.get_num_threads() == 1:
+                self.ranker = IndexScorerWARP(
+                    self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound
+                )
+            else:
+                self.ranker = ParallelIndexScorerWARP(
+                    self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound
+                )
         else:
             self.ranker = IndexScorer(self.index, use_gpu, load_index_with_mmap)
 
