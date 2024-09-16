@@ -79,7 +79,7 @@ class Searcher:
                 )
             else:
                 self.ranker = ParallelIndexScorerWARP(
-                    self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound
+                    self.index, self.config, use_gpu, load_index_with_mmap, t_prime=warp_config.t_prime, bound=warp_config.bound, fused_decompression_merge=warp_config.fused_ext
                 )
         else:
             self.ranker = IndexScorer(self.index, use_gpu, load_index_with_mmap)

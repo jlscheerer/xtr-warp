@@ -86,6 +86,7 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
         load_index_with_mmap=False,
         t_prime=None,
         bound=128,
+        fused_decompression_merge=True
     ):
         assert not use_gpu
         assert not load_index_with_mmap
@@ -95,6 +96,7 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
             config=config,
             use_gpu=use_gpu,
             load_index_with_mmap=load_index_with_mmap,
+            fused_decompression_merge=fused_decompression_merge
         )
 
         num_threads = torch.get_num_threads()
