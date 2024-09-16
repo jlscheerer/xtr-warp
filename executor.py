@@ -16,7 +16,20 @@ def index_size(config, params):
     }
 
 def latency(config, params):
-    return {}
+    NUM_RUNS = params.get("num_runs", 3)
+    assert NUM_RUNS > 0
+    results = []
+    for _ in range(NUM_RUNS):
+        results.append(spawn_and_execute("utility/latency_runner.py", config, params))
+    metrics = results[0]["metrics"]
+    assert all(x["metrics"] == metrics for x in results)
+    update = results[0]["_update"]
+    assert all(x["_update"] == update for x in results)
+    return {
+        "metrics": metrics,
+        "tracker": [x["tracker"] for x in results],
+        "_update": update
+    }
 
 def metrics(config, params):
     run = spawn_and_execute("utility/latency_runner.py", config, params)

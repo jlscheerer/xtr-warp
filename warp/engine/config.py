@@ -28,6 +28,10 @@ class WARPRunConfig:
     nprobe: int = 16
     t_prime: Optional[int] = None
 
+    # Use the fused decompression + merge candidate scores extension.
+    # NOTE This option is only applicable with num_threads != 1
+    fused_ext: bool = True
+
     # NOTE To be more efficient, we could also derive this from the dataset.
     #      For now we just set it to a sufficiently high constant value.
     bound: int = 128

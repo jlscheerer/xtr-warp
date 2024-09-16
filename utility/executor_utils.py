@@ -13,7 +13,7 @@ from contextlib import redirect_stdout
 BEIR_DATASETS = ["nfcorpus", "scifact", "scidocs", "fiqa", "webis-touche2020", "quora"]
 LOTTE_DATASETS = ["lifestyle", "writing", "recreation", "technology", "science", "pooled"]
 
-def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=None, runtime=None, split="test", bound=None, num_threads=1):
+def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=None, runtime=None, split="test", bound=None, num_threads=1, fused_ext=None):
     assert collection in ["beir", "lotte"]
     if collection == "beir":
         assert dataset in BEIR_DATASETS
@@ -25,7 +25,9 @@ def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=Non
     assert document_top_k is None or isinstance(document_top_k, int)
     assert split in ["dev", "test"]
     assert bound is None or isinstance(bound, int)
-    return {
+    if fused_ext is None:
+        fused_ext = True
+    config = {
         "collection": collection,
         "dataset": dataset,
         "nbits": nbits,
@@ -37,8 +39,11 @@ def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=Non
         "bound": bound,
         "num_threads": num_threads
     }
+    if num_threads != 1:
+        config["fused_ext"] = fused_ext
+    return config
 
-def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, runtimes=None, split="test", bound=None, num_threads=None):
+def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, runtimes=None, fused_exts=None, split="test", bound=None, num_threads=None):
     if num_threads is None:
         num_threads = 1
     if not isinstance(nbits, list):
@@ -55,6 +60,8 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, ru
         runtimes = [runtimes]
     if not isinstance(num_threads, list):
         num_threads = [num_threads]
+    if not isinstance(fused_exts, list):
+        fused_exts = [fused_exts]
     configs = []
     for collection_dataset in datasets:
         collection, dataset = collection_dataset.split(".")
@@ -64,8 +71,10 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, ru
                     for document_top_k in document_top_ks:
                         for runtime in runtimes:
                             for threads in num_threads:
-                                configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe, t_prime=t_prime,
-                                                            document_top_k=document_top_k, runtime=runtime, split=split, bound=bound, num_threads=threads))
+                                for fused_ext in fused_exts:
+                                    configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe, t_prime=t_prime,
+                                                                document_top_k=document_top_k, runtime=runtime, split=split, bound=bound, num_threads=threads,
+                                                                fused_ext=fused_ext))
     return configs
 
 def _get(config, key):
@@ -78,7 +87,8 @@ def _expand_configs_file(configuration_file):
     return _expand_configs(datasets=_get(configs, "datasets"), nbits=_get(configs, "nbits"),
                            nprobes=_get(configs, "nprobe"),t_primes=_get(configs, "t_prime"),
                            document_top_ks=_get(configs, "document_top_k"), runtimes=_get(configs, "runtime"),
-                           split=_get(configs, "datasplit"), bound=_get(configs, "bound"), num_threads=_get(configs, "num_threads"))
+                           split=_get(configs, "datasplit"), bound=_get(configs, "bound"), num_threads=_get(configs, "num_threads"),
+                           fused_exts=_get(configs, "fused_ext"))
 
 def _write_results(results_file, data):
     with open(results_file, "w") as file:
