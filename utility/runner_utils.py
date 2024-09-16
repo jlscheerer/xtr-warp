@@ -41,6 +41,9 @@ def make_run_config(config):
     k = config["document_top_k"] or DEFAULT_K_VALUE
 
     num_threads = config["num_threads"]
+    fused_ext = True
+    if num_threads != 1:
+        fused_ext = config["fused_ext"]
     return WARPRunConfig(
         collection=collection,
         dataset=dataset,
@@ -51,5 +54,6 @@ def make_run_config(config):
         t_prime=t_prime,
         k=k,
         runtime=_make_runtime(config["runtime"], num_threads=num_threads),
-        bound=bound
+        bound=bound,
+        fused_ext=fused_ext
     )
