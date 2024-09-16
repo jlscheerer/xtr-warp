@@ -17,12 +17,14 @@ class ParallelIndexLoaderWARP:
         config: ColBERTConfig,
         use_gpu=True,
         load_index_with_mmap=False,
+        fused_decompression_merge=True
     ):
         assert not use_gpu and not load_index_with_mmap
 
         self.index_path = index_path
         self.use_gpu = use_gpu
         self.load_index_with_mmap = load_index_with_mmap
+        self.fused_decompression_merge = fused_decompression_merge
 
         print_message(f"#> Loading buckets...")
         bucket_weights = torch.from_numpy(
@@ -165,7 +167,7 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
         cls.decompress_centroids_cpp[4] = decompress_centroids_cpp.parallel_decompress_centroids_4_cpp
 
         print_message(
-            f"Loading merge_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+            f"Loading parallel_merge_candidate_scores_cpp extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
         )
         cls.merge_candidate_scores_cpp = load(
             name="parallel_merge_candidate_scores_cpp",
@@ -178,6 +180,24 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
             extra_cflags=cflags,
             verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
         ).parallel_merge_candidate_scores_cpp
+
+        print_message(
+            f"Loading parallel_fused_decompress_merge extension (set WARP_LOAD_TORCH_EXTENSION_VERBOSE=True for more info)..."
+        )
+        cls.fused_decompress_merge_cpp = dict()
+        fused_decompress_merge_cpp = load(
+            name="parallel_fused_decompress_merge_cpp",
+            sources=[
+                os.path.join(
+                    pathlib.Path(__file__).parent.resolve(),
+                    "parallel_fused_decompress_merge.cpp",
+                ),
+            ],
+            extra_cflags=cflags,
+            verbose=os.getenv("WARP_LOAD_TORCH_EXTENSION_VERBOSE", "False") == "True",
+        )
+        cls.fused_decompress_merge_cpp[2] = fused_decompress_merge_cpp.parallel_fused_decompress_merge_2_cpp
+        cls.fused_decompress_merge_cpp[4] = fused_decompress_merge_cpp.parallel_fused_decompress_merge_4_cpp
 
         cls.loaded_extensions = True
 
@@ -197,18 +217,28 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
             )
             tracker.end("top-k Precompute")
 
-            tracker.begin("Decompression")
             num_tokens = Q_mask.sum().item()
-            capacities, candidate_sizes, candidate_pids, candidate_scores = self._decompress_centroids(
-                Q.squeeze(0), cells, centroid_scores, self.nprobe, num_tokens
-            )
-            tracker.end("Decompression")
+            if self.fused_decompression_merge:
+                tracker.begin("Decompression")
+                tracker.end("Decompression")
 
-            tracker.begin("Build Matrix")
-            pids, scores = self._merge_candidate_scores(
-                capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, k, num_tokens
-            )
-            tracker.end("Build Matrix")
+                tracker.begin("Build Matrix")
+                pids, scores = self._fused_decompress_merge_scores(
+                    Q.squeeze(0), cells, centroid_scores, self.nprobe, num_tokens, mse_estimates, k
+                )
+                tracker.end("Build Matrix")
+            else:
+                tracker.begin("Decompression")
+                capacities, candidate_sizes, candidate_pids, candidate_scores = self._decompress_centroids(
+                    Q.squeeze(0), cells, centroid_scores, self.nprobe, num_tokens
+                )
+                tracker.end("Decompression")
+
+                tracker.begin("Build Matrix")
+                pids, scores = self._merge_candidate_scores(
+                    capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, k, num_tokens
+                )
+                tracker.end("Build Matrix")
 
             return pids, scores
 
@@ -245,5 +275,20 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
     ):
         pids, scores = ParallelIndexScorerWARP.merge_candidate_scores_cpp(
             capacities, candidate_sizes, candidate_pids, candidate_scores, mse_estimates, self.nprobe, k, num_tokens
+        )
+        return pids.tolist(), scores.tolist()
+
+    def _fused_decompress_merge_scores(
+        self, Q, centroid_ids, centroid_scores, nprobe, num_tokens, mse_estimates, k
+    ):
+        centroid_ids = centroid_ids.long()
+        begins = self.offsets_compacted[centroid_ids]
+        ends = self.offsets_compacted[centroid_ids + 1]
+
+        capacities = ends - begins
+        pids, scores = ParallelIndexScorerWARP.fused_decompress_merge_cpp[self.nbits](
+            begins, ends, capacities, centroid_scores, self.codes_compacted,
+            self.residuals_compacted, self.bucket_weights, Q, nprobe, num_tokens,
+            mse_estimates, k
         )
         return pids.tolist(), scores.tolist()
