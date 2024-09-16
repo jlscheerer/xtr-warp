@@ -13,7 +13,7 @@ from contextlib import redirect_stdout
 BEIR_DATASETS = ["nfcorpus", "scifact", "scidocs", "fiqa", "webis-touche2020", "quora"]
 LOTTE_DATASETS = ["lifestyle", "writing", "recreation", "technology", "science", "pooled"]
 
-def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=None, runtime=None, split="test", bound=None):
+def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=None, runtime=None, split="test", bound=None, num_threads=1):
     assert collection in ["beir", "lotte"]
     if collection == "beir":
         assert dataset in BEIR_DATASETS
@@ -35,9 +35,12 @@ def _make_config(collection, dataset, nbits, nprobe, t_prime, document_top_k=Non
         "runtime": runtime,
         "split": split,
         "bound": bound,
+        "num_threads": num_threads
     }
 
-def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, runtimes=None, split="test", bound=None):
+def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, runtimes=None, split="test", bound=None, num_threads=None):
+    if num_threads is None:
+        num_threads = 1
     if not isinstance(nbits, list):
         nbits = [nbits]
     if not isinstance(datasets, list):
@@ -50,6 +53,8 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, ru
         document_top_ks = [document_top_ks]
     if not isinstance(runtimes, list):
         runtimes = [runtimes]
+    if not isinstance(num_threads, list):
+        num_threads = [num_threads]
     configs = []
     for collection_dataset in datasets:
         collection, dataset = collection_dataset.split(".")
@@ -58,8 +63,9 @@ def _expand_configs(datasets, nbits, nprobes, t_primes, document_top_ks=None, ru
                 for t_prime in t_primes:
                     for document_top_k in document_top_ks:
                         for runtime in runtimes:
-                            configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe, t_prime=t_prime,
-                                                        document_top_k=document_top_k, runtime=runtime, split=split, bound=bound))
+                            for threads in num_threads:
+                                configs.append(_make_config(collection=collection, dataset=dataset, nbits=nbit, nprobe=nprobe, t_prime=t_prime,
+                                                            document_top_k=document_top_k, runtime=runtime, split=split, bound=bound, num_threads=threads))
     return configs
 
 def _get(config, key):
@@ -72,13 +78,13 @@ def _expand_configs_file(configuration_file):
     return _expand_configs(datasets=_get(configs, "datasets"), nbits=_get(configs, "nbits"),
                            nprobes=_get(configs, "nprobe"),t_primes=_get(configs, "t_prime"),
                            document_top_ks=_get(configs, "document_top_k"), runtimes=_get(configs, "runtime"),
-                           split=_get(configs, "datasplit"), bound=_get(configs, "bound"))
+                           split=_get(configs, "datasplit"), bound=_get(configs, "bound"), num_threads=_get(configs, "num_threads"))
 
 def _write_results(results_file, data):
     with open(results_file, "w") as file:
         file.write(json.dumps(data, indent=3))
 
-def load_configuration(filename, overwrite=False):
+def load_configuration(filename, info=False, overwrite=False):
     with open(filename, "r") as file:
         config_file = json.loads(file.read())
     name = config_file["name"]
@@ -86,11 +92,12 @@ def load_configuration(filename, overwrite=False):
     params = _get(config_file, "parameters") or {}
     configs = _expand_configs_file(config_file)
 
-    os.makedirs("experiments/results", exist_ok=True)
     results_file = os.path.join("experiments/results", f"{name}.json")
-    assert not os.path.exists(results_file) or overwrite
+    if not info:
+        os.makedirs("experiments/results", exist_ok=True)
+        assert not os.path.exists(results_file) or overwrite
 
-    _write_results(results_file, [])
+        _write_results(results_file, [])
     return results_file, type_, params, configs
 
 def _init_proc(env_vars):
@@ -177,3 +184,24 @@ def spawn_and_execute(script, config, params):
         print(process.stderr, file=sys.stderr)
     assert response[-1] == "#> Done"
     return json.loads(response[-2])
+
+def _strip_provenance(config, result):
+    del result["parameters"]
+    del result["type"]
+    if "document_top_k" not in config:
+        result["document_top_k"] = None
+    if "num_threads" not in config:
+        result["num_threads"] = 1
+    return result
+
+def check_execution(filename, configs, result_file):
+    with open(filename, "r") as file:
+        config_data = json.loads(file.read())
+    with open(result_file, "r") as file:
+        results = json.loads(file.read())
+    result_configs = [_strip_provenance(config_data["configurations"], result["provenance"]) for result in results]
+    missing = []
+    for config in configs:
+        if config not in result_configs:
+            missing.append(config)
+    print(len(missing), len(configs))

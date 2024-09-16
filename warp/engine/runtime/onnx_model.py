@@ -27,6 +27,8 @@ class XTROnnxConfig:
     opset_version: int = 16
     quantization: XTROnnxQuantization = XTROnnxQuantization.NONE
 
+    num_threads: int = 1
+
     @property
     def base_name(self):
         return f"xtr.v={self.opset_version}.batch={self.batch_size}"
@@ -52,14 +54,13 @@ class XTROnnxModel:
 
         print(f"#> Loading XTR ONNX model from '{model_path}' ({round(filesize, 2)}MB)")
         sess_opts = ort.SessionOptions()
-        sess_opts.intra_op_num_threads = 1
-        sess_opts.inter_op_num_threads = 1
+        sess_opts.intra_op_num_threads = config.num_threads
+        sess_opts.inter_op_num_threads = config.num_threads
         sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
         self.model = ort.InferenceSession(
-            model_path,
-            sess_opts=sess_opts,
+            model_path, sess_opts,
         )
 
         self.tokenizer = XTRTokenizer(

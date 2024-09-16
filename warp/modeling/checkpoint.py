@@ -8,11 +8,11 @@ from warp.modeling.colbert import ColBERT
 from warp.modeling.xtr import XTRCheckpoint, build_xtr_model
 from warp.engine.config import USE_CORE_ML
 
-if USE_CORE_ML:
-    from warp.engine.runtime.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
+from warp.engine.runtime.torchscript_model import XTRTorchScriptConfig, XTRTorchScriptModel
 from warp.engine.runtime.onnx_model import XTROnnxConfig, XTROnnxModel
 from warp.engine.runtime.openvino_model import XTROpenVinoConfig, XTROpenVinoModel
-
+if USE_CORE_ML:
+    from warp.engine.runtime.coreml_model import XTRCoreMLConfig, XTRCoreMLModel
 
 class Checkpoint(ColBERT):
     """
@@ -29,6 +29,10 @@ class Checkpoint(ColBERT):
                 if warp_config is not None:
                     config = warp_config.colbert()
                 return XTRCheckpoint(xtr, config)
+
+            if isinstance(warp_config.runtime, XTRTorchScriptConfig):
+                model = XTRTorchScriptModel(warp_config.runtime)
+                return XTRCheckpoint(model, warp_config.colbert())
 
             if isinstance(warp_config.runtime, XTROnnxConfig):
                 model = XTROnnxModel(warp_config.runtime)
