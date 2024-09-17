@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     searcher = WARPSearcher(run_config)
     queries = WARPQueries(run_config)
-    steps = ["Query Encoding", "Candidate Generation", "top-k Precompute", "Decompression", "Build Matrix"]
+    steps = ["Query Encoding", "Candidate Generation", "top-k Precompute", "Decompression", "MSE via Reduction", "Build Matrix"]
     tracker = ExecutionTracker(name="XTR/WARP", steps=steps)
 
     k = config["document_top_k"]

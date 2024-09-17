@@ -24,6 +24,7 @@ class WARPSearcher:
                 config=config,
                 index_root=config.index_root,
                 warp_engine=True,
+                ablation_params=config.ablation_params,
             )
 
         collection_map_path = os.path.join(

@@ -41,6 +41,8 @@ class WARPRunConfig:
     # runtime == None uses "default" PyTorch for inference.
     runtime: Optional[RuntimeConfig] = None
 
+    ablation_params: Optional[dict] = None
+
     @property
     def index_root(self):
         INDEX_ROOT = os.environ["INDEX_ROOT"]
