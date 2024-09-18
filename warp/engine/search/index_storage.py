@@ -8,7 +8,7 @@ from warp.infra.config.config import ColBERTConfig
 from warp.utils.tracker import NOPTracker
 from warp.search.strided_tensor import StridedTensor
 from warp.utils.utils import print_message
-from warp.engine.constants import QUERY_MAXLEN, TOKEN_EMBED_DIM, T_PRIME_MAX
+from warp.engine.constants import TPrimePolicy, QUERY_MAXLEN, TOKEN_EMBED_DIM, T_PRIME_MAX
 
 from torch_scatter import scatter_max, scatter_min
 
@@ -147,16 +147,15 @@ class IndexScorerWARP(IndexLoaderWARP):
 
         (num_centroids, _) = self.centroids.shape
         if t_prime is not None:
-            self.t_prime = t_prime
+            self.t_prime = TPrimePolicy(value=t_prime)
         elif num_centroids <= 2**16:
             (num_embeddings, _) = self.residuals_compacted.shape
-            self.t_prime = int(np.sqrt(8 * num_embeddings) / 1000) * 1000
+            self.t_prime = TPrimePolicy(value=int(np.sqrt(8 * num_embeddings) / 1000) * 1000)
         else: self.t_prime = T_PRIME_MAX
 
         assert config.nbits in [2, 4]
         self.nbits = config.nbits
 
-        print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
         self.bound = bound or 128
 
         # [ ========== [Ablation] ========== ]
@@ -275,7 +274,7 @@ class IndexScorerWARP(IndexLoaderWARP):
             tracker.begin("top-k Precompute")
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
             cells, centroid_scores, mse_estimates = self.centroid_selection_fn(
-                Q_mask, centroid_scores, self.nprobe, self.t_prime, compute_mse=not self.compute_mse_via_reduce
+                Q_mask, centroid_scores, self.nprobe, self.t_prime[k], compute_mse=not self.compute_mse_via_reduce
             )
             tracker.end("top-k Precompute")
 

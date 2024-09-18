@@ -66,6 +66,10 @@ Replace `${dataset}` with the desired dataset name as specified [here](https://g
 ## Bugs
 If you experience bugs, or have suggestions for improvements, please use the issue tracker to report them.
 
+
 ------------
 
 We provide code to reproduce the baseline evaluations for [XTR](https://github.com/jlscheerer/xtr-eval) and [ColBERTv2/PLAID](https://github.com/jlscheerer/colbert-eval).
+
+> [!TIP]
+> We provide scripts to reproduce all of these measurements on Google Cloud. The scripts can be found [here](https://github.com/jlscheerer/xtr-warp-gcp).
