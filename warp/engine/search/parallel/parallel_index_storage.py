@@ -109,7 +109,7 @@ class ParallelIndexScorerWARP(ParallelIndexLoaderWARP):
 
         (num_centroids, _) = self.centroids.shape
         if t_prime is not None:
-            self.t_prime = t_prime
+            self.t_prime = TPrimePolicy(value=t_prime)
         elif num_centroids <= 2**16:
             (num_embeddings, _) = self.residuals_compacted.shape
             self.t_prime = TPrimePolicy(value=int(np.sqrt(8 * num_embeddings) / 1000) * 1000)
