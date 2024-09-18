@@ -6,7 +6,7 @@ import numpy as np
 from warp.infra.config.config import ColBERTConfig
 from warp.utils.tracker import NOPTracker
 from warp.utils.utils import print_message
-from warp.engine.constants import T_PRIME_MAX
+from warp.engine.constants import TPrimePolicy, T_PRIME_MAX
 
 from torch.utils.cpp_extension import load
 
@@ -105,13 +105,12 @@ class IndexScorerWARP(IndexLoaderWARP):
             self.t_prime = t_prime
         elif num_centroids <= 2**16:
             (num_embeddings, _) = self.residuals_compacted.shape
-            self.t_prime = int(np.sqrt(8 * num_embeddings) / 1000) * 1000
+            self.t_prime = TPrimePolicy(value=int(np.sqrt(8 * num_embeddings) / 1000) * 1000)
         else: self.t_prime = T_PRIME_MAX
 
         assert config.nbits in [2, 4]
         self.nbits = config.nbits
 
-        print("nprobe", self.nprobe, "t_prime", self.t_prime, "nbits", config.nbits)
         self.bound = bound or 128
 
     @classmethod
@@ -186,7 +185,7 @@ class IndexScorerWARP(IndexLoaderWARP):
             tracker.begin("top-k Precompute")
             Q_mask = Q.squeeze(0).count_nonzero(dim=1) != 0
             cells, centroid_scores, mse_estimates = self._warp_select_centroids(
-                Q_mask, centroid_scores, self.nprobe, self.t_prime
+                Q_mask, centroid_scores, self.nprobe, self.t_prime[k]
             )
             tracker.end("top-k Precompute")
 

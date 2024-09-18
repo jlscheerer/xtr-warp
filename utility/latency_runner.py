@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     params = {
         "nprobe": ranker.nprobe,
-        "t_prime": ranker.t_prime,
+        "t_prime": ranker.t_prime[k],
         "document_top_k": searcher.config.k,
         "bound": ranker.bound
     }
