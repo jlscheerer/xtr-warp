@@ -39,6 +39,7 @@ def make_run_config(config):
     collection, dataset, split = config["collection"], config["dataset"], config["split"]
     nbits, nprobe, t_prime, bound = config["nbits"], config["nprobe"], config["t_prime"], config["bound"]
     k = config["document_top_k"] or DEFAULT_K_VALUE
+    ablation_params = config["ablation_params"]
 
     num_threads = config["num_threads"]
     fused_ext = True
@@ -55,5 +56,6 @@ def make_run_config(config):
         k=k,
         runtime=_make_runtime(config["runtime"], num_threads=num_threads),
         bound=bound,
-        fused_ext=fused_ext
+        fused_ext=fused_ext,
+        ablation_params=ablation_params
     )
