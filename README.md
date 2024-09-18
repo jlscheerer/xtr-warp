@@ -63,8 +63,12 @@ Replace `${dataset}` with the desired dataset name as specified [here](https://g
 ## Branches
 - [`main`](https://github.com/jlscheerer/xtr-warptree/main): Stable branch with XTR/WARP.
 
+> [!TIP]
+> We provide code to reproduce our measurements on Google Cloud. The required scripts can be found [here](https://github.com/jlscheerer/xtr-warp-gcp)
+
 ## Bugs
 If you experience bugs, or have suggestions for improvements, please use the issue tracker to report them.
+
 
 ------------
 
