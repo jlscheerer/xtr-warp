@@ -7,9 +7,8 @@
 #include <condition_variable>
 #include <cstddef>
 #include <iostream>
-#include <mutex>
 #include <optional>
-#include <queue>
+#include <vector>
 #include <string>
 #include <thread>
 #include <vector>
@@ -25,7 +24,7 @@ public:
 
 private:
   task_ref successor_ = -1;
-  std::atomic<int> pending_{0};
+  std::atomic<int32_t> pending_{0};
   data_type data_;
 
   friend struct task_graph<data_type>;
@@ -61,7 +60,8 @@ template <typename task_type> struct task_graph {
   void run_all_tasks(const int32_t num_threads) {
     for (task_ref task_id = 0; task_id < num_tasks_; ++task_id) {
       if (tasks_[task_id].is_leaf()) {
-        queue_.push(task_id);
+        queue_.push_back(task_id);
+        ++queue_size_;
       }
     }
     for (int32_t i = 0; i < num_threads; ++i) {
@@ -75,21 +75,15 @@ template <typename task_type> struct task_graph {
 
 private:
   std::optional<task_ref> dequeue_task() {
-    // NOTE A condition_variable is (likely) overkill here.
-    if (should_terminate_) return std::nullopt;
     task_ref task_id;
     {
-      std::unique_lock<std::mutex> guard(queue_mutex_);
-      if (queue_.empty() || should_terminate_) return std::nullopt;
-      queue_cv_.wait(guard,
-                     [this] { return !queue_.empty() || should_terminate_; });
+      int32_t task_pos = queue_pos_.fetch_add(1);
       // NOTE we can immediately kill a thread once the queue is empty as the number of tasks only ever decreases.
       //      i.e., we will never add to the queue again. 
-      if (queue_.empty() || should_terminate_) {
+      if (task_pos >= queue_size_) {
         return std::nullopt;
       }
-      task_id = queue_.front();
-      queue_.pop();
+      task_id = queue_[task_pos];
     }
     return task_id;
   }
@@ -107,7 +101,6 @@ private:
 
         const task_ref successor = task.successor_;
         if (successor == -1) {
-          notify_tasks_complete();
           return;
         }
         if (tasks_[successor].pending_.fetch_sub(1) == 1) {
@@ -119,23 +112,16 @@ private:
     }
   }
 
-  void notify_tasks_complete() {
-    {
-      std::unique_lock<std::mutex> guard;
-      should_terminate_ = true;
-    }
-    queue_cv_.notify_all();
-  }
-
   task_ref num_tasks_ = 0;
   std::vector<task<task_type>> tasks_;
   const context_type context_;
 
-  std::queue<task_ref> queue_;
+  std::vector<task_ref> queue_;
+  int32_t queue_size_ = 0;
+  std::atomic<int32_t> queue_pos_{0};
+
   std::vector<std::thread> threads_;
   bool should_terminate_ = false;
-  std::mutex queue_mutex_;
-  std::condition_variable queue_cv_;
 
   friend std::ostream &operator<<(std::ostream &os,
                                   const task_graph<task_type> &graph) {
