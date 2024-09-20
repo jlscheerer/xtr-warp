@@ -122,7 +122,7 @@ void merge_candidates_tokens(std::vector<annotated_stride_view<>> &views,
             if (rhs < num_tokens) {
                 // NOTE We can just subtract two prefix sums for the range of MSE values!
                 const float lhs_mse = mse_prefix[rhs] - mse_prefix[lhs];
-                const float rhs_mse = mse_prefix[std::min(rhs + step_size, num_tokens - 1)] - mse_prefix[rhs];
+                const float rhs_mse = mse_prefix[std::min(rhs + step_size, num_tokens)] - mse_prefix[rhs];
 
                 reduce_sum_mse_combiner combiner(lhs_mse, rhs_mse);
                 merge_candidate_strides<>(views[lhs * nprobe], views[rhs * nprobe],

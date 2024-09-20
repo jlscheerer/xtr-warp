@@ -181,7 +181,7 @@ struct merge_task {
         } else if (task.type == reduction_type::kSumReduce) {
             const int step_size = task.begin_or_stepsize;
             const float lhs_mse = (*context.mse_prefix)[task.rhs] - (*context.mse_prefix)[task.lhs];
-            const float rhs_mse = (*context.mse_prefix)[std::min(task.rhs + step_size, max_num_tokens - 1)] - (*context.mse_prefix)[task.rhs];
+            const float rhs_mse = (*context.mse_prefix)[std::min(task.rhs + step_size, max_num_tokens)] - (*context.mse_prefix)[task.rhs];
 
             reduce_sum_mse_combiner combiner(lhs_mse, rhs_mse);
             annotated_stride_view<> &lhs_data = (*context.data)[task.lhs * context.nprobe];
