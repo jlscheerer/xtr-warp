@@ -331,11 +331,11 @@ class IndexScorerWARP(IndexLoaderWARP):
             # Source: https://pytorch.org/docs/stable/generated/torch.argmax.html
             t_prime_index = torch.argmax(cluster_index_mask.int(), dim=1)
             mse_estimates = topk.values[torch.arange(QUERY_MAXLEN), t_prime_index]
-
-            cells = topk.indices[:, :nprobe].flatten().contiguous()
-            scores = topk.values[:, :nprobe].flatten().contiguous()
         else:
             mse_estimates = None
+
+        cells = topk.indices[:, :nprobe].flatten().contiguous()
+        scores = topk.values[:, :nprobe].flatten().contiguous()
 
         cells[scores == 0] = self.kdummy_centroid
         return cells, scores, mse_estimates
