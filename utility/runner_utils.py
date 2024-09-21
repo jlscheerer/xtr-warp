@@ -25,10 +25,8 @@ def _make_runtime(runtime, num_threads=1):
         quantization = XTROnnxQuantization[match[1]]
         return XTROnnxConfig(quantization=quantization, num_threads=num_threads)
 
-    match = re.match(f"OPENVINO\\.({QUANTIZATION_TYPES})", runtime)
-    if match is not None:
-        quantization = XTROnnxQuantization[match[1]]
-        return XTROpenVinoConfig(quantization=quantization, num_threads=num_threads)
+    if runtime == "OPENVINO":
+        return XTROpenVinoConfig(num_threads=num_threads)
 
     if USE_CORE_ML and runtime == "CORE_ML":
         return XTRCoreMLConfig(num_threads=num_threads)
