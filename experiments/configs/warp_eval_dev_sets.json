@@ -1,0 +1,29 @@
+{
+    "name": "warp_eval_dev_sets",
+    "type": "metrics",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "beir.fiqa",
+            "beir.quora",
+            "lotte.lifestyle",
+            "lotte.recreation",
+            "lotte.writing",
+            "lotte.technology",
+            "lotte.science",
+            "lotte.pooled"
+        ],
+        "nbits": [
+            2, 4
+        ],
+        "nprobe": [
+            1, 2, 4, 8, 12, 16, 24, 32, 48, 64
+        ],
+        "t_prime": [
+            1000, 2000, 3000, 4000, 5000, 10000, 15000, 25000, 35000, 50000, 65000, 75000, 85000, 100000
+        ],
+        "bound": 3200,
+        "datasplit": "dev",
+        "document_top_k": 1000
+    }
+}

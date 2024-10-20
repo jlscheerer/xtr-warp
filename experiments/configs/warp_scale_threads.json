@@ -1,0 +1,21 @@
+{
+    "name": "warp_scale_threads",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "lotte.pooled"
+        ],
+        "runtime": [
+            "ONNX.PREPROCESS"
+        ],
+        "nbits": 4,
+        "nprobe": [8, 16, 24, 32],
+        "datasplit": "dev",
+        "document_top_k": [100],
+        "num_threads": [1, 2, 4, 8, 16]
+    },
+    "parameters": {
+        "num_runs": 3
+    }
+}
+

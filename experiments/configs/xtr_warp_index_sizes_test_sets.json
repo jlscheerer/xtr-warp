@@ -1,0 +1,22 @@
+{
+    "name": "xtr_warp_index_sizes_test_sets",
+    "type": "index_size",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "beir.scifact",
+            "beir.scidocs",
+            "beir.quora",
+            "beir.fiqa",
+            "beir.webis-touche2020",
+            "lotte.lifestyle",
+            "lotte.recreation",
+            "lotte.writing",
+            "lotte.technology",
+            "lotte.science",
+            "lotte.pooled"
+        ],
+        "datasplit": "test",
+        "nbits": [2, 4]
+    }
+}

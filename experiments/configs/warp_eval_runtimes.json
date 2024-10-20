@@ -1,0 +1,30 @@
+{
+    "name": "warp_eval_runtimes",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "beir.fiqa",
+            "lotte.technology",
+            "lotte.pooled"
+        ],
+        "runtime": [
+            null,
+            "TORCHSCRIPT",
+            "ONNX.NONE",
+            "ONNX.PREPROCESS",
+            "ONNX.DYN_QUANTIZED_QINT8",
+            "ONNX.QUANTIZED_QATTENTION",
+            "OPENVINO"
+        ],
+        "nbits": 4,
+        "nprobe": 32,
+        "datasplit": "dev",
+        "bound": 196,
+        "document_top_k": [100, 1000],
+        "num_threads": [1, 2, 4, 8, 16]
+    },
+    "parameters": {
+        "num_runs": 3
+    }
+}

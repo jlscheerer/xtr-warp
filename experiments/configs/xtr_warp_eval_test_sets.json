@@ -1,0 +1,29 @@
+{
+    "name": "xtr_warp_eval_test_sets",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "beir.scifact",
+            "beir.scidocs",
+            "beir.fiqa",
+            "beir.quora",
+            "beir.webis-touche2020",
+            "lotte.lifestyle",
+            "lotte.recreation",
+            "lotte.writing",
+            "lotte.technology",
+            "lotte.science",
+            "lotte.pooled"
+        ],
+        "nbits": [
+            2, 4
+        ],
+        "nprobe": [
+            8, 12, 16, 24, 32
+        ],
+        "runtime": "ONNX.PREPROCESS",
+        "datasplit": "test",
+        "document_top_k": 100
+    }
+}
