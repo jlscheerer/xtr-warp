@@ -1,0 +1,17 @@
+{
+    "name": "xtr_warp_eval_test_sets_16",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "lotte.lifestyle",
+            "lotte.pooled"
+        ],
+        "nbits": 4,
+        "nprobe": 32,
+        "runtime": "ONNX.PREPROCESS",
+        "datasplit": "test",
+        "document_top_k": 100,
+        "num_threads": 16
+    }
+}

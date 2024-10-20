@@ -1,0 +1,31 @@
+{
+    "name": "warp_eval_dev_sets_gcloud",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+	        "beir.nfcorpus",
+	        "beir.fiqa",
+	        "beir.quora",
+            "lotte.lifestyle",
+            "lotte.recreation",
+            "lotte.writing",
+            "lotte.science"
+        ],
+        "nbits": 4,
+        "nprobe": [
+            8, 16, 32
+        ],
+        "num_threads": [
+            1, 2, 4, 8
+        ],
+        "runtime": [
+            "ONNX.PREPROCESS"
+    	],
+        "datasplit": "dev",
+        "document_top_k": 100,
+	    "bound": 196
+    },
+    "parameters": {
+    	"num_runs": 3
+    }
+}

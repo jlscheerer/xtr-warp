@@ -1,0 +1,26 @@
+{
+    "name": "warp_scale_datasets",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "beir.nfcorpus",
+            "beir.quora",
+            "lotte.technology",
+            "lotte.science",
+            "lotte.pooled"
+        ],
+        "runtime": [
+            "ONNX.PREPROCESS"
+        ],
+        "nbits": 4,
+        "nprobe": [8, 16, 32],
+        "datasplit": "dev",
+        "document_top_k": [100],
+        "bound": 196,
+        "num_threads": [1]
+    },
+    "parameters": {
+        "num_runs": 3
+    }
+}
+
