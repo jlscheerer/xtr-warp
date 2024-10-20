@@ -1,0 +1,23 @@
+{
+    "name": "warp_ablation_selection",
+    "type": "latency",
+    "configurations": {
+        "datasets": [
+            "lotte.pooled"
+        ],
+        "nbits": 4,
+        "nprobe": [
+            1, 2, 4, 8, 16, 24, 32, 48, 64, 96
+        ],
+        "ablation_params": [
+            {"selection_fn": "warp_select_py", "decompression_fn": "explicit_decompress_py", "normalized_decompression": true, "aggregate_fn": "merge_aggregate_cpp", "compute_mse_via_reduce": false},
+            {"selection_fn": "warp_select_py", "decompression_fn": "explicit_decompress_py", "normalized_decompression": true, "aggregate_fn": "merge_aggregate_cpp", "compute_mse_via_reduce": true},
+            {"selection_fn": "warp_select_cpp", "decompression_fn": "explicit_decompress_py", "normalized_decompression": false, "aggregate_fn": "merge_aggregate_cpp", "compute_mse_via_reduce": false}
+        ],
+        "document_top_k": 100,
+        "datasplit": "dev"
+    },
+    "parameters": {
+        "num_runs": 1
+    }
+}
